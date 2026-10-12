@@ -10,33 +10,85 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedBeheerRouteImport } from './routes/_authenticated/beheer'
+import { Route as AuthenticatedKeukenRouteImport } from './routes/_authenticated/keuken'
+import { Route as TafelNummerRouteImport } from './routes/tafel.$nummer'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedBeheerRoute = AuthenticatedBeheerRouteImport.update({
+  id: '/beheer',
+  path: '/beheer',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKeukenRoute = AuthenticatedKeukenRouteImport.update({
+  id: '/keuken',
+  path: '/keuken',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const TafelNummerRoute = TafelNummerRouteImport.update({
+  id: '/tafel/$nummer',
+  path: '/tafel/$nummer',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/beheer': typeof AuthenticatedBeheerRoute
+  '/keuken': typeof AuthenticatedKeukenRoute
+  '/tafel/$nummer': typeof TafelNummerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/beheer': typeof AuthenticatedBeheerRoute
+  '/keuken': typeof AuthenticatedKeukenRoute
+  '/tafel/$nummer': typeof TafelNummerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/beheer': typeof AuthenticatedBeheerRoute
+  '/_authenticated/keuken': typeof AuthenticatedKeukenRoute
+  '/tafel/$nummer': typeof TafelNummerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/auth' | '/beheer' | '/keuken' | '/tafel/$nummer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/auth' | '/beheer' | '/keuken' | '/tafel/$nummer'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/beheer'
+    | '/_authenticated/keuken'
+    | '/tafel/$nummer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  TafelNummerRoute: typeof TafelNummerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +100,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/beheer': {
+      id: '/_authenticated/beheer'
+      path: '/beheer'
+      fullPath: '/beheer'
+      preLoaderRoute: typeof AuthenticatedBeheerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/keuken': {
+      id: '/_authenticated/keuken'
+      path: '/keuken'
+      fullPath: '/keuken'
+      preLoaderRoute: typeof AuthenticatedKeukenRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/tafel/$nummer': {
+      id: '/tafel/$nummer'
+      path: '/tafel/$nummer'
+      fullPath: '/tafel/$nummer'
+      preLoaderRoute: typeof TafelNummerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBeheerRoute: typeof AuthenticatedBeheerRoute
+  AuthenticatedKeukenRoute: typeof AuthenticatedKeukenRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBeheerRoute: AuthenticatedBeheerRoute,
+  AuthenticatedKeukenRoute: AuthenticatedKeukenRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+  TafelNummerRoute: TafelNummerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
