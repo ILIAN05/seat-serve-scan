@@ -14,13 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      dishes: {
+        Row: {
+          allergens: string[]
+          available: boolean
+          category_id: string
+          created_at: string
+          description: string
+          id: string
+          image_url: string | null
+          name: string
+          price: number
+          sort_order: number
+        }
+        Insert: {
+          allergens?: string[]
+          available?: boolean
+          category_id: string
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string | null
+          name: string
+          price?: number
+          sort_order?: number
+        }
+        Update: {
+          allergens?: string[]
+          available?: boolean
+          category_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string | null
+          name?: string
+          price?: number
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dishes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          dish_id: string | null
+          dish_name: string
+          id: string
+          note: string | null
+          order_id: string
+          quantity: number
+          unit_price: number
+        }
+        Insert: {
+          dish_id?: string | null
+          dish_name: string
+          id?: string
+          note?: string | null
+          order_id: string
+          quantity: number
+          unit_price: number
+        }
+        Update: {
+          dish_id?: string | null
+          dish_name?: string
+          id?: string
+          note?: string | null
+          order_id?: string
+          quantity?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string
+          id: string
+          status: string
+          table_number: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status?: string
+          table_number: number
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string
+          table_number?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          id: number
+          restaurant_name: string
+          table_count: number
+        }
+        Insert: {
+          id?: number
+          restaurant_name?: string
+          table_count?: number
+        }
+        Update: {
+          id?: number
+          restaurant_name?: string
+          table_count?: number
+        }
+        Relationships: []
+      }
+      table_requests: {
+        Row: {
+          created_at: string
+          handled: boolean
+          id: string
+          table_number: number
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          handled?: boolean
+          id?: string
+          table_number: number
+          type: string
+        }
+        Update: {
+          created_at?: string
+          handled?: boolean
+          id?: string
+          table_number?: number
+          type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      place_order: { Args: { _items: Json; _table: number }; Returns: string }
     }
     Enums: {
       [_ in never]: never
