@@ -28,7 +28,7 @@ function Index() {
       </p>
       <div className="mt-12 grid gap-4 md:grid-cols-3">
         {tiles.map((t) => (
-          <Link key={t.title} to={t.to} params={"params" in t ? t.params : undefined} className="group rounded-2xl border bg-card p-6 shadow-soft transition hover:-translate-y-0.5">
+          <Link key={t.title} to={t.to} params={("params" in t ? t.params : {}) as never} className="group rounded-2xl border bg-card p-6 shadow-soft transition hover:-translate-y-0.5">
             <div className="mb-4 inline-flex rounded-xl bg-accent p-3 text-accent-foreground"><t.icon className="h-6 w-6" /></div>
             <h2 className="text-xl font-semibold">{t.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t.text}</p>

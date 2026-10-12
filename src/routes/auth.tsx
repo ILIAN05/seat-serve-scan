@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>) => ({
-    redirect: typeof s.redirect === "string" && s.redirect.startsWith("/") && !s.redirect.startsWith("//") ? s.redirect : "/keuken",
+    redirect: typeof s["redirect"] === "string" && s["redirect"].startsWith("/") && !s["redirect"].startsWith("//") ? s["redirect"] : "/keuken",
   }),
   head: () => ({
     meta: [
@@ -35,12 +35,12 @@ function AuthPage() {
     if (mode === "login") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (error) return toast.error("Inloggen mislukt. Controleer je e-mail en wachtwoord.");
+      if (error) { toast.error("Inloggen mislukt. Controleer je e-mail en wachtwoord."); return; }
       navigate({ to: redirect });
     } else {
       const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + redirect } });
       setBusy(false);
-      if (error) return toast.error(error.message);
+      if (error) { toast.error(error.message); return; }
       if (data.session) navigate({ to: redirect });
       else toast.success("Account aangemaakt. Bevestig je e-mailadres via de link in je mailbox.");
     }

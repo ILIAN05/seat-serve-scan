@@ -151,7 +151,7 @@ function Kitchen() {
           <div className="space-y-2">
             {done.length === 0 && <p className="text-muted-foreground">Nog niets afgerond.</p>}
             {done.map((o) => (
-              <div key={o.id} className={`rounded-xl border p-3 ${statusStyle.klaar}`}>
+              <div key={o.id} className={`rounded-xl border p-3 ${statusStyle["klaar"]}`}>
                 <div className="flex justify-between font-semibold"><span>Tafel {o.table_number}</span><span>{tijd(o.updated_at)}</span></div>
                 <p className="text-sm text-muted-foreground">{o.order_items.map((i) => `${i.quantity}× ${i.dish_name}`).join(", ")}</p>
               </div>

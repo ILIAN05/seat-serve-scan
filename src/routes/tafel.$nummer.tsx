@@ -77,7 +77,7 @@ function TablePage() {
       _table: table,
       _items: cart.map((l) => ({ dish_id: l.dishId, quantity: l.quantity, note: l.note })),
     });
-    if (error || !data) return toast.error("Bestellen lukte niet. Probeer opnieuw.");
+    if (error || !data) { toast.error("Bestellen lukte niet. Probeer opnieuw."); return; }
     localStorage.setItem(storageKey, data);
     setOrderId(data);
     setCart([]);
@@ -233,7 +233,7 @@ function AddDialog({ dish, onClose, onAdd }: { dish: Dish | null; onClose: () =>
   );
 }
 
-function OrderStatus({ orderId, table, name, onNew, onRequest }: { orderId: string; table: number; name?: string; onNew: () => void; onRequest: (t: "ober" | "rekening") => void }) {
+function OrderStatus({ orderId, table, name, onNew, onRequest }: { orderId: string; table: number; name?: string | undefined; onNew: () => void; onRequest: (t: "ober" | "rekening") => void }) {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["order", orderId],
@@ -264,7 +264,7 @@ function OrderStatus({ orderId, table, name, onNew, onRequest }: { orderId: stri
       <div className="mt-8 rounded-3xl border bg-card p-6 shadow-soft">
         <div className="space-y-5">
           {steps.map((s, i) => {
-            const Icon = icons[i];
+            const Icon = icons[i]!;
             const done = i <= idx;
             return (
               <div key={s} className="flex items-center gap-4">

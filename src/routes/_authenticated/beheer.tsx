@@ -104,7 +104,7 @@ function MenuEditor({ cats, dishes, onChange }: { cats: Cat[]; dishes: Dish[]; o
   async function addCat() {
     if (!newCat.trim()) return;
     const { error } = await supabase.from("categories").insert({ name: newCat.trim(), sort_order: cats.length + 1 });
-    if (error) return toast.error("Categorie toevoegen mislukt");
+    if (error) { toast.error("Categorie toevoegen mislukt"); return; }
     setNewCat(""); onChange();
   }
   async function renameCat(c: Cat) {
@@ -129,7 +129,7 @@ function MenuEditor({ cats, dishes, onChange }: { cats: Cat[]; dishes: Dish[]; o
       <div className="flex gap-2">
         <Input placeholder="Nieuwe categorie" value={newCat} onChange={(e) => setNewCat(e.target.value)} className="max-w-xs" />
         <Button variant="outline" onClick={addCat}><Plus className="h-4 w-4" /> Categorie</Button>
-        <Button onClick={() => setEditing({ category_id: cats[0]?.id, allergens: [], available: true, price: 0, name: "", description: "" })} disabled={!cats.length}><Plus className="h-4 w-4" /> Gerecht</Button>
+        <Button onClick={() => setEditing({ category_id: cats[0]?.id ?? "", allergens: [], available: true, price: 0, name: "", description: "" })} disabled={!cats.length}><Plus className="h-4 w-4" /> Gerecht</Button>
       </div>
 
       {cats.map((c) => (
@@ -170,10 +170,10 @@ function DishDialog({ dish, cats, onClose, onSaved }: { dish: Partial<Dish> | nu
   const set = (p: Partial<Dish>) => setF((x) => ({ ...x, ...p }));
 
   async function save() {
-    if (!f.name?.trim() || !f.category_id) return toast.error("Naam en categorie zijn verplicht");
+    if (!f.name?.trim() || !f.category_id) { toast.error("Naam en categorie zijn verplicht"); return; }
     const row = { name: f.name.trim(), description: f.description ?? "", price: Number(f.price) || 0, allergens: f.allergens ?? [], image_url: f.image_url?.trim() || null, available: f.available ?? true, category_id: f.category_id };
     const { error } = f.id ? await supabase.from("dishes").update(row).eq("id", f.id) : await supabase.from("dishes").insert(row);
-    if (error) return toast.error("Opslaan mislukt");
+    if (error) { toast.error("Opslaan mislukt"); return; }
     toast.success("Opgeslagen"); onSaved();
   }
 
@@ -187,7 +187,7 @@ function DishDialog({ dish, cats, onClose, onSaved }: { dish: Partial<Dish> | nu
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label>Prijs (€)</Label><Input type="number" step="0.10" min="0" value={f.price ?? 0} onChange={(e) => set({ price: Number(e.target.value) })} /></div>
             <div className="space-y-1"><Label>Categorie</Label>
-              <Select value={f.category_id} onValueChange={(v) => set({ category_id: v })}>
+              <Select value={f.category_id ?? ""} onValueChange={(v) => set({ category_id: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
@@ -227,7 +227,7 @@ function Tables({ count, onChange }: { count: number; onChange: () => void }) {
   async function save() {
     const v = Math.max(1, Math.min(200, Math.round(n)));
     const { error } = await supabase.from("settings").update({ table_count: v }).eq("id", 1);
-    if (error) return toast.error("Opslaan mislukt");
+    if (error) { toast.error("Opslaan mislukt"); return; }
     toast.success(`Aantal tafels: ${v}`); onChange();
   }
 
