@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Orders are placed only via the `place_order` database function so prices come from the database, not the browser.
+- Any signed-in user counts as staff (keuken/beheer); customers are anonymous.
