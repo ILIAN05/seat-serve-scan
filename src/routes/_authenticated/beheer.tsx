@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Download, LogOut, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { Download, Eraser, LogOut, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,16 @@ function Admin() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
 
+  async function resetDemo() {
+    if (!confirm("Alle bestellingen en tafelmeldingen van vandaag verwijderen? Handig om de demo opnieuw te starten.")) return;
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    await supabase.from("table_requests").delete().gte("created_at", start.toISOString());
+    const { error } = await supabase.from("orders").delete().gte("created_at", start.toISOString());
+    if (error) { toast.error("Opruimen mislukt. Probeer opnieuw."); return; }
+    toast.success("Demo-data van vandaag verwijderd");
+    refresh();
+  }
+
   async function signOut() {
     await qc.cancelQueries(); qc.clear();
     await supabase.auth.signOut();
@@ -66,6 +76,7 @@ function Admin() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild><Link to="/keuken">Keukenscherm</Link></Button>
+          <Button variant="outline" onClick={resetDemo}><Eraser className="h-4 w-4" /> Demo opruimen</Button>
           <Button variant="ghost" onClick={signOut}><LogOut className="h-4 w-4" /> Uitloggen</Button>
         </div>
       </header>

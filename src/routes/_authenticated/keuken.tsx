@@ -49,10 +49,12 @@ function Kitchen() {
   const { data: orders = [] } = useQuery({
     queryKey: ["kitchen-orders"],
     queryFn: async () => (await supabase.from("orders").select("*, order_items(*)").gte("created_at", start.toISOString()).order("created_at")).data ?? [],
+    refetchInterval: 30_000, // vangnet als de live-verbinding wegvalt
   });
   const { data: requests = [] } = useQuery({
     queryKey: ["kitchen-requests"],
     queryFn: async () => (await supabase.from("table_requests").select("*").eq("handled", false).order("created_at")).data ?? [],
+    refetchInterval: 30_000,
   });
 
   useEffect(() => {
