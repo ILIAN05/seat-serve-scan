@@ -1,10 +1,46 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { Bell, Receipt, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+  Bell,
+  Check,
+  Maximize,
+  Minimize,
+  PauseCircle,
+  PlayCircle,
+  Receipt,
+  RotateCcw,
+  Timer,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { STATUS_LABEL, tijd } from "@/lib/menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useNow, useSettings, useWakeLock } from "@/lib/hooks";
+import {
+  billTotal,
+  duurLabel,
+  euro,
+  minutesSince,
+  readStore,
+  startOfToday,
+  STATUS_LABEL,
+  tijd,
+  writeStore,
+} from "@/lib/menu";
+import type { Tables } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/keuken")({
   head: () => ({
@@ -18,20 +54,31 @@ export const Route = createFileRoute("/_authenticated/keuken")({
   component: Kitchen,
 });
 
+type Order = Tables<"orders"> & { order_items: Tables<"order_items">[] };
+
 function beep(ctx: AudioContext, double = true) {
   const play = (t: number, f: number) => {
-    const o = ctx.createOscillator(); const g = ctx.createGain();
-    o.frequency.value = f; o.type = "sine";
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
-    o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.4);
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.frequency.value = f;
+    o.type = "sine";
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    o.connect(g).connect(ctx.destination);
+    o.start(t);
+    o.stop(t + 0.4);
   };
-  const n = ctx.currentTime; play(n, 880); if (double) play(n + 0.4, 1175);
+  const n = ctx.currentTime;
+  play(n, 880);
+  if (double) play(n + 0.4, 1175);
 }
 
 const statusStyle: Record<string, string> = {
   ontvangen: "border-status-new bg-status-new-soft",
   in_bereiding: "border-status-busy bg-status-busy-soft",
   klaar: "border-status-done bg-status-done-soft",
+  geannuleerd: "border-border bg-muted",
 };
 const badgeStyle: Record<string, string> = {
   ontvangen: "bg-status-new text-primary-foreground",
@@ -39,128 +86,485 @@ const badgeStyle: Record<string, string> = {
   klaar: "bg-status-done text-primary-foreground",
 };
 
+const CHECKED_KEY = "keuken-afgevinkt";
+
 function Kitchen() {
   const qc = useQueryClient();
+  const now = useNow(15_000);
+  const { data: settings } = useSettings();
+  const lateAfter = settings?.late_after_minutes ?? 15;
+
   const audio = useRef<AudioContext | null>(null);
   const [sound, setSound] = useState(false);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const awake = useWakeLock(sound);
 
-  const start = new Date(); start.setHours(0, 0, 0, 0);
-  const { data: orders = [] } = useQuery({
+  const { data: ordersData } = useQuery({
     queryKey: ["kitchen-orders"],
-    queryFn: async () => (await supabase.from("orders").select("*, order_items(*)").gte("created_at", start.toISOString()).order("created_at")).data ?? [],
-    refetchInterval: 30_000, // vangnet als de live-verbinding wegvalt
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, order_items(*)")
+        .gte("created_at", startOfToday().toISOString())
+        .order("created_at");
+      if (error) throw error;
+      return data as Order[];
+    },
+    refetchInterval: 15_000, // vangnet als de live-verbinding wegvalt
   });
-  const { data: requests = [] } = useQuery({
+  const { data: requestsData } = useQuery({
     queryKey: ["kitchen-requests"],
-    queryFn: async () => (await supabase.from("table_requests").select("*").eq("handled", false).order("created_at")).data ?? [],
-    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("table_requests")
+        .select("*")
+        .eq("handled", false)
+        .order("created_at");
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 15_000,
   });
 
+  const orders = useMemo(() => ordersData ?? [], [ordersData]);
+  const requests = useMemo(() => requestsData ?? [], [requestsData]);
+
+  // Realtime: elke wijziging laat de lijsten opnieuw ophalen
   useEffect(() => {
-    const ch = supabase.channel("kitchen")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (p) => {
-        const id = (p.new as { id: string }).id;
-        setFresh((s) => new Set(s).add(id));
-        setTimeout(() => setFresh((s) => { const n = new Set(s); n.delete(id); return n; }), 15000);
-        if (audio.current) beep(audio.current);
-        // items worden net na de order ingevoegd
-        setTimeout(() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }), 600);
+    const ch = supabase
+      .channel("kitchen")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (p) => {
+        // de gerechten worden net na de bestelling ingevoegd
+        setTimeout(
+          () => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }),
+          p.eventType === "INSERT" ? 600 : 0,
+        );
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, () => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "table_requests" }, (p) => {
-        if (p.eventType === "INSERT" && audio.current) beep(audio.current, false);
-        qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "table_requests" }, () =>
+        qc.invalidateQueries({ queryKey: ["kitchen-requests"] }),
+      )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, [qc]);
 
-  async function setStatus(id: string, status: string) {
-    await supabase.from("orders").update({ status }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+  // Nieuwe bestellingen en meldingen detecteren (werkt ook als realtime wegvalt en we op polling draaien)
+  const knownOrders = useRef<Set<string> | null>(null);
+  const knownRequests = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!ordersData) return; // eerste lading: niets als nieuw markeren
+    const ids = new Set(orders.map((o) => o.id));
+    if (knownOrders.current) {
+      const added = orders
+        .filter((o) => !knownOrders.current!.has(o.id) && o.status === "ontvangen")
+        .map((o) => o.id);
+      if (added.length) {
+        setFresh((s) => new Set([...s, ...added]));
+        setTimeout(
+          () =>
+            setFresh((s) => {
+              const n = new Set(s);
+              added.forEach((id) => n.delete(id));
+              return n;
+            }),
+          15_000,
+        );
+        if (audio.current && sound) beep(audio.current);
+      }
+    }
+    knownOrders.current = ids;
+  }, [orders, ordersData, sound]);
+  useEffect(() => {
+    if (!requestsData) return;
+    const ids = new Set(requests.map((r) => r.id));
+    if (
+      knownRequests.current &&
+      requests.some((r) => !knownRequests.current!.has(r.id)) &&
+      audio.current &&
+      sound
+    )
+      beep(audio.current, false);
+    knownRequests.current = ids;
+  }, [requests, requestsData, sound]);
+
+  // Afgevinkte gerechten bewaren op deze tablet
+  useEffect(() => {
+    setChecked(new Set(readStore<string[]>(CHECKED_KEY, [])));
+  }, []);
+  function toggleItem(id: string) {
+    setChecked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      const todays = new Set(orders.flatMap((o) => o.order_items.map((i) => i.id)));
+      writeStore(
+        CHECKED_KEY,
+        [...n].filter((x) => todays.has(x)),
+      );
+      return n;
+    });
   }
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  function toggleSound() {
+    if (!audio.current) audio.current = new AudioContext();
+    if (sound) {
+      setSound(false);
+      void audio.current.suspend();
+    } else {
+      void audio.current.resume();
+      beep(audio.current, false);
+      setSound(true);
+    }
+  }
+
+  async function setStatus(o: Order, status: string, undoable = false) {
+    const previous = o.status;
+    const { error } = await supabase.from("orders").update({ status }).eq("id", o.id);
+    if (error) {
+      toast.error("Status wijzigen mislukt. Probeer opnieuw.");
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+    if (undoable) {
+      toast.success(`Tafel ${o.table_number}: ${STATUS_LABEL[status]?.toLowerCase()}`, {
+        action: {
+          label: "Ongedaan maken",
+          onClick: () => {
+            void supabase
+              .from("orders")
+              .update({ status: previous })
+              .eq("id", o.id)
+              .then(() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }));
+          },
+        },
+        duration: 6000,
+      });
+    }
+  }
+
   async function handle(id: string) {
     await supabase.from("table_requests").update({ handled: true }).eq("id", id);
     qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
   }
 
-  const open = orders.filter((o) => o.status !== "klaar");
-  const done = orders.filter((o) => o.status === "klaar").reverse();
+  async function toggleOrdering() {
+    if (!settings) return;
+    const { error } = await supabase
+      .from("settings")
+      .update({ ordering_open: !settings.ordering_open })
+      .eq("id", 1);
+    if (error) {
+      toast.error("Wijzigen mislukt");
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["settings"] });
+    toast.success(
+      settings.ordering_open
+        ? "Bestellen gepauzeerd: gasten kunnen even niet bestellen"
+        : "Bestellen staat weer open",
+    );
+  }
+
+  const open = orders.filter((o) => o.status === "ontvangen" || o.status === "in_bereiding");
+  const done = orders
+    .filter((o) => o.status === "klaar" || o.status === "geannuleerd")
+    .reverse()
+    .slice(0, 40);
+  const lateCount = open.filter((o) => minutesSince(o.created_at, now) >= lateAfter).length;
+  const tableTotals = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const o of orders.filter((x) => !x.paid_at))
+      m.set(o.table_number, (m.get(o.table_number) ?? 0) + billTotal([o]));
+    return m;
+  }, [orders]);
+  const toCancel = orders.find((o) => o.id === cancelId);
 
   return (
-    <div className="min-h-screen p-6">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="min-h-screen p-4 md:p-6">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-4xl font-semibold">Keuken</h1>
-          <p className="text-lg text-muted-foreground">{open.length} openstaande bestelling{open.length === 1 ? "" : "en"}</p>
+          <p className="text-lg text-muted-foreground">
+            {open.length} openstaande bestelling{open.length === 1 ? "" : "en"}
+            {lateCount > 0 && (
+              <span className="font-semibold text-destructive">
+                {" "}
+                · {lateCount} wacht{lateCount === 1 ? "" : "en"} langer dan {lateAfter} min
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button size="lg" variant={sound ? "default" : "outline"} onClick={() => {
-            if (!audio.current) audio.current = new AudioContext();
-            if (sound) { setSound(false); audio.current.suspend(); } else { audio.current.resume(); beep(audio.current, false); setSound(true); }
-          }}>
-            {sound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />} {sound ? "Geluid aan" : "Geluid inschakelen"}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="lg"
+            variant={settings?.ordering_open === false ? "destructive" : "outline"}
+            onClick={toggleOrdering}
+            disabled={!settings}
+          >
+            {settings?.ordering_open === false ? (
+              <>
+                <PlayCircle className="h-5 w-5" /> Bestellen hervatten
+              </>
+            ) : (
+              <>
+                <PauseCircle className="h-5 w-5" /> Bestellen pauzeren
+              </>
+            )}
           </Button>
-          <Button size="lg" variant="outline" asChild><Link to="/beheer">Beheer</Link></Button>
+          <Button size="lg" variant={sound ? "default" : "outline"} onClick={toggleSound}>
+            {sound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}{" "}
+            {sound ? "Geluid aan" : "Geluid inschakelen"}
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            aria-label={fullscreen ? "Volledig scherm verlaten" : "Volledig scherm"}
+            onClick={() =>
+              (document.fullscreenElement
+                ? document.exitFullscreen()
+                : document.documentElement.requestFullscreen()
+              ).catch(() => {})
+            }
+          >
+            {fullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+          </Button>
+          <Button size="lg" variant="outline" asChild>
+            <Link to="/beheer">Beheer</Link>
+          </Button>
         </div>
       </header>
 
+      {!sound && (
+        <button
+          onClick={toggleSound}
+          className="mb-4 flex w-full items-center gap-3 rounded-2xl border-2 border-status-new bg-status-new-soft px-5 py-3 text-left"
+        >
+          <VolumeX className="h-6 w-6 shrink-0 text-status-new" />
+          <span className="text-lg">
+            <strong>Geluid staat uit.</strong> Tik hier om meldingen te horen en het scherm wakker
+            te houden.
+          </span>
+        </button>
+      )}
+      {settings?.ordering_open === false && (
+        <div className="mb-4 flex items-center gap-3 rounded-2xl border-2 border-destructive bg-destructive/5 px-5 py-3 text-lg">
+          <PauseCircle className="h-6 w-6 text-destructive" />{" "}
+          <span>
+            <strong>Bestellen is gepauzeerd.</strong> Gasten kunnen het menu zien maar niet
+            bestellen.
+          </span>
+        </div>
+      )}
+
       {requests.length > 0 && (
-        <section className="mb-6 flex flex-wrap gap-3">
+        <section className="mb-6 flex flex-wrap gap-3" aria-label="Tafelmeldingen">
           {requests.map((r) => (
-            <div key={r.id} className="flex items-center gap-4 rounded-2xl border-2 border-oak bg-card px-5 py-4 shadow-soft animate-new-order">
-              {r.type === "ober" ? <Bell className="h-7 w-7 text-oak" /> : <Receipt className="h-7 w-7 text-oak" />}
+            <div
+              key={r.id}
+              className="flex items-center gap-4 rounded-2xl border-2 border-oak bg-card px-5 py-4 shadow-soft animate-new-order"
+            >
+              {r.type === "ober" ? (
+                <Bell className="h-7 w-7 text-oak" />
+              ) : (
+                <Receipt className="h-7 w-7 text-oak" />
+              )}
               <div>
                 <p className="text-xl font-bold">Tafel {r.table_number}</p>
-                <p className="text-muted-foreground">{r.type === "ober" ? "Ober geroepen" : "Vraagt de rekening"} · {tijd(r.created_at)}</p>
+                <p className="text-muted-foreground">
+                  {r.type === "ober"
+                    ? "Ober geroepen"
+                    : `Vraagt de rekening${tableTotals.get(r.table_number) ? ` · ${euro(tableTotals.get(r.table_number)!)}` : ""}`}{" "}
+                  · {duurLabel(minutesSince(r.created_at, now))}
+                </p>
               </div>
-              <Button size="lg" onClick={() => handle(r.id)}>Afgehandeld</Button>
+              <Button size="lg" onClick={() => handle(r.id)}>
+                <Check className="h-5 w-5" /> Afgehandeld
+              </Button>
             </div>
           ))}
         </section>
       )}
 
-      <div className="grid grid-cols-[1fr_320px] gap-6">
-        <section className="grid content-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
-          {open.length === 0 && <p className="col-span-full rounded-2xl border border-dashed p-12 text-center text-xl text-muted-foreground">Geen openstaande bestellingen</p>}
-          {open.map((o) => (
-            <article key={o.id} className={`flex flex-col rounded-2xl border-2 p-5 shadow-soft ${statusStyle[o.status]} ${fresh.has(o.id) ? "animate-new-order" : ""}`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-display text-4xl font-bold">Tafel {o.table_number}</p>
-                  <p className="text-lg text-muted-foreground">{tijd(o.created_at)}</p>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <section
+          className="grid content-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]"
+          aria-label="Openstaande bestellingen"
+        >
+          {open.length === 0 && (
+            <p className="col-span-full rounded-2xl border border-dashed p-12 text-center text-xl text-muted-foreground">
+              Geen openstaande bestellingen
+            </p>
+          )}
+          {open.map((o) => {
+            const mins = minutesSince(o.created_at, now);
+            const late = mins >= lateAfter;
+            const allChecked =
+              o.order_items.length > 0 && o.order_items.every((i) => checked.has(i.id));
+            return (
+              <article
+                key={o.id}
+                className={`flex flex-col rounded-2xl border-2 p-5 shadow-soft ${statusStyle[o.status]} ${fresh.has(o.id) ? "animate-new-order" : ""} ${late ? "ring-4 ring-destructive/60" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-display text-3xl font-bold xl:text-4xl">
+                      Tafel {o.table_number}
+                    </p>
+                    <p
+                      className={`flex items-center gap-1 whitespace-nowrap text-lg ${late ? "font-bold text-destructive" : "text-muted-foreground"}`}
+                    >
+                      <Timer className="h-4 w-4" /> {tijd(o.created_at)} · {duurLabel(mins)}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${badgeStyle[o.status]}`}
+                  >
+                    {fresh.has(o.id) ? "NIEUW" : STATUS_LABEL[o.status]}
+                  </span>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-sm font-bold ${badgeStyle[o.status]}`}>{fresh.has(o.id) ? "NIEUW" : STATUS_LABEL[o.status]}</span>
-              </div>
-              <ul className="my-4 flex-1 space-y-2 text-xl">
-                {o.order_items.map((it) => (
-                  <li key={it.id}>
-                    <span className="font-bold">{it.quantity}×</span> {it.dish_name}
-                    {it.note && <p className="ml-8 text-base font-semibold text-destructive">↳ {it.note}</p>}
-                  </li>
-                ))}
-              </ul>
-              <div className="grid grid-cols-2 gap-2">
-                <Button size="lg" variant="outline" className="h-14 text-base" disabled={o.status === "in_bereiding"} onClick={() => setStatus(o.id, "in_bereiding")}>In bereiding</Button>
-                <Button size="lg" className="h-14 text-base" onClick={() => setStatus(o.id, "klaar")}>Klaar</Button>
-              </div>
-            </article>
-          ))}
+                <ul className="my-4 flex-1 space-y-1 text-xl">
+                  {o.order_items.map((it) => {
+                    const on = checked.has(it.id);
+                    return (
+                      <li key={it.id}>
+                        <button
+                          onClick={() => toggleItem(it.id)}
+                          className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left hover:bg-card/60"
+                          aria-pressed={on}
+                        >
+                          <span
+                            className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${on ? "border-status-done bg-status-done text-primary-foreground" : "border-foreground/30 bg-card"}`}
+                          >
+                            {on && <Check className="h-3.5 w-3.5" />}
+                          </span>
+                          <span className={on ? "text-muted-foreground line-through" : ""}>
+                            <span className="font-bold">{it.quantity}×</span> {it.dish_name}
+                            {it.note && (
+                              <span className="block text-base font-semibold text-destructive no-underline">
+                                ↳ {it.note}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="grid grid-cols-2 gap-2">
+                  {o.status === "ontvangen" ? (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="h-14 bg-card text-base"
+                      onClick={() => setStatus(o, "in_bereiding")}
+                    >
+                      Start bereiding
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="h-14 bg-card text-base"
+                      onClick={() => setCancelId(o.id)}
+                    >
+                      <X className="h-4 w-4" /> Annuleren
+                    </Button>
+                  )}
+                  <Button
+                    size="lg"
+                    className={`h-14 text-base ${allChecked ? "animate-pulse" : ""}`}
+                    onClick={() => setStatus(o, "klaar", true)}
+                  >
+                    <Check className="h-5 w-5" /> Klaar
+                  </Button>
+                </div>
+                {o.status === "ontvangen" && (
+                  <button
+                    className="mt-2 text-sm text-muted-foreground underline-offset-4 hover:underline"
+                    onClick={() => setCancelId(o.id)}
+                  >
+                    Bestelling annuleren
+                  </button>
+                )}
+              </article>
+            );
+          })}
         </section>
-        <aside>
+        <aside aria-label="Afgerond vandaag">
           <h2 className="mb-3 text-2xl font-semibold">Afgerond vandaag</h2>
           <div className="space-y-2">
             {done.length === 0 && <p className="text-muted-foreground">Nog niets afgerond.</p>}
             {done.map((o) => (
-              <div key={o.id} className={`rounded-xl border p-3 ${statusStyle["klaar"]}`}>
-                <div className="flex justify-between font-semibold"><span>Tafel {o.table_number}</span><span>{tijd(o.updated_at)}</span></div>
-                <p className="text-sm text-muted-foreground">{o.order_items.map((i) => `${i.quantity}× ${i.dish_name}`).join(", ")}</p>
+              <div key={o.id} className={`rounded-xl border p-3 ${statusStyle[o.status]}`}>
+                <div className="flex items-center justify-between gap-2 font-semibold">
+                  <span className={o.status === "geannuleerd" ? "line-through" : ""}>
+                    Tafel {o.table_number}
+                  </span>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {o.status === "geannuleerd"
+                      ? "geannuleerd"
+                      : `klaar ${tijd(o.ready_at ?? o.updated_at)}`}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {o.order_items.map((i) => `${i.quantity}× ${i.dish_name}`).join(", ")}
+                </p>
+                {!o.paid_at && (
+                  <button
+                    className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                    onClick={() => setStatus(o, "in_bereiding")}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Terugzetten
+                  </button>
+                )}
               </div>
             ))}
           </div>
+          {sound && (
+            <p className="mt-6 text-xs text-muted-foreground">
+              {awake
+                ? "Scherm blijft aan zolang deze pagina open is."
+                : "Tip: zet de automatische schermvergrendeling van de tablet uit."}
+            </p>
+          )}
         </aside>
       </div>
+
+      <AlertDialog open={!!toCancel} onOpenChange={(o) => !o && setCancelId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Bestelling van tafel {toCancel?.table_number} annuleren?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              De gast ziet op zijn gsm dat de bestelling geannuleerd is. Het bedrag komt niet op de
+              rekening. Je kan dit later terugzetten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Niet annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (toCancel) void setStatus(toCancel, "geannuleerd", true);
+                setCancelId(null);
+              }}
+            >
+              Annuleren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

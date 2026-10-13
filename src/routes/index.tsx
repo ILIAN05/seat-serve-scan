@@ -1,40 +1,128 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChefHat, QrCode, Settings } from "lucide-react";
+import {
+  ChefHat,
+  MonitorPlay,
+  QrCode,
+  ScanLine,
+  Settings,
+  ShoppingBag,
+  Utensils,
+} from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Bistro De Houder – Bestellen aan tafel" },
-      { name: "description", content: "Scan de QR-code op je tafel, bekijk het menu en bestel meteen vanaf je gsm." },
+      {
+        name: "description",
+        content: "Scan de QR-code op je tafel, bekijk het menu en bestel meteen vanaf je gsm.",
+      },
       { property: "og:title", content: "Bistro De Houder – Bestellen aan tafel" },
-      { property: "og:description", content: "Scan, kies en bestel vanaf je gsm. Je bestelling gaat rechtstreeks naar de keuken." },
+      {
+        property: "og:description",
+        content:
+          "Scan, kies en bestel vanaf je gsm. Je bestelling gaat rechtstreeks naar de keuken.",
+      },
     ],
   }),
   component: Index,
 });
 
+const STEPS = [
+  {
+    icon: ScanLine,
+    title: "Scan",
+    text: "De gast scant de QR-code in de tafelhouder. Geen app nodig.",
+  },
+  {
+    icon: ShoppingBag,
+    title: "Bestel",
+    text: "Menu met allergenen, opmerkingen per gerecht en live status.",
+  },
+  {
+    icon: ChefHat,
+    title: "Bereid",
+    text: "De bestelling verschijnt meteen op de tablet in de keuken, met geluid.",
+  },
+  {
+    icon: Utensils,
+    title: "Reken af",
+    text: "De zaal ziet per tafel wat open staat en rekent af met één tik.",
+  },
+];
+
 function Index() {
   const tiles = [
-    { to: "/tafel/$nummer" as const, params: { nummer: "7" }, icon: QrCode, title: "Klantenpagina", text: "Zo ziet een gast het menu na het scannen (tafel 7)." },
-    { to: "/keuken" as const, icon: ChefHat, title: "Keukenscherm", text: "Live binnenkomende bestellingen en meldingen." },
-    { to: "/beheer" as const, icon: Settings, title: "Beheer", text: "Menu, tafels, QR-codes en omzet van vandaag." },
+    {
+      to: "/tafel/$nummer" as const,
+      params: { nummer: "7" },
+      icon: QrCode,
+      title: "Gast",
+      text: "Zo ziet een gast het menu na het scannen (tafel 7).",
+    },
+    {
+      to: "/keuken" as const,
+      icon: ChefHat,
+      title: "Keuken",
+      text: "Live binnenkomende bestellingen, timers en meldingen.",
+    },
+    {
+      to: "/beheer" as const,
+      icon: Settings,
+      title: "Beheer",
+      text: "Zaaloverzicht, afrekenen, menu, QR-codes en cijfers.",
+    },
+    {
+      to: "/demo" as const,
+      icon: MonitorPlay,
+      title: "Demo",
+      text: "Gast en keuken naast elkaar, met een gesimuleerde drukke avond.",
+    },
   ];
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-16">
       <div className="mb-3 h-2 w-16 rounded-full bg-oak-gradient" />
       <h1 className="text-5xl font-semibold tracking-tight md:text-6xl">Bistro De Houder</h1>
       <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-        Scan de QR-code op je tafel, kies rustig uit het menu en bestel meteen vanaf je gsm.
+        Scan de QR-code op je tafel, kies rustig uit het menu en bestel meteen vanaf je gsm. De
+        keuken krijgt je bestelling live binnen.
       </p>
-      <div className="mt-12 grid gap-4 md:grid-cols-3">
+
+      <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {STEPS.map((s, i) => (
+          <li key={s.title} className="rounded-2xl bg-secondary/60 p-5">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-card text-foreground">
+                {i + 1}
+              </span>
+              <s.icon className="h-4 w-4" />
+            </div>
+            <h2 className="text-lg font-semibold">{s.title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{s.text}</p>
+          </li>
+        ))}
+      </ol>
+
+      <h2 className="mt-14 text-2xl font-semibold">Probeer het zelf</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map((t) => (
-          <Link key={t.title} to={t.to} params={("params" in t ? t.params : {}) as never} className="group rounded-2xl border bg-card p-6 shadow-soft transition hover:-translate-y-0.5">
-            <div className="mb-4 inline-flex rounded-xl bg-accent p-3 text-accent-foreground"><t.icon className="h-6 w-6" /></div>
-            <h2 className="text-xl font-semibold">{t.title}</h2>
+          <Link
+            key={t.title}
+            to={t.to}
+            params={("params" in t ? t.params : {}) as never}
+            className="group rounded-2xl border bg-card p-6 shadow-soft transition hover:-translate-y-0.5"
+          >
+            <div className="mb-4 inline-flex rounded-xl bg-accent p-3 text-accent-foreground">
+              <t.icon className="h-6 w-6" />
+            </div>
+            <h3 className="font-sans text-xl font-semibold">{t.title}</h3>
             <p className="mt-1 text-sm text-muted-foreground">{t.text}</p>
           </Link>
         ))}
       </div>
+      <p className="mt-6 text-sm text-muted-foreground">
+        Keuken, beheer en demo vragen een personeelslogin.
+      </p>
     </main>
   );
 }

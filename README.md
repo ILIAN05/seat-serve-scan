@@ -80,3 +80,31 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+---
+
+## Prototype-uitbreidingen (oktober 2026)
+
+**Gast (`/tafel/:nummer`)**
+- Meerdere bestelrondes per tafel met een lopende rekening die alle gsm's aan tafel live zien ("Jouw tafel").
+- Allergiefilter (14 wettelijke allergenen): gerechten met die allergenen krijgen een waarschuwing.
+- Melding als een gerecht in het mandje uitverkocht raakt, of als bestellen gepauzeerd is.
+- Mandje blijft bewaard bij herladen; categorie-navigatie volgt het scrollen.
+
+**Keuken (`/keuken`)**
+- Timer per bestelling, rood na de ingestelde drempel (standaard 15 min).
+- Gerechten afvinken, bestelling annuleren, "Klaar" ongedaan maken en afgewerkte bestellingen terugzetten.
+- Duidelijke waarschuwing als het geluid uit staat; scherm blijft wakker (Wake Lock) en volledig-scherm-knop.
+- Bestellen pauzeren rechtstreeks vanuit de keuken.
+
+**Beheer (`/beheer`)**
+- Zaaloverzicht per tafel met openstaand bedrag, meldingen en **Afrekenen** (rekening afdrukken kan ook).
+- Menu: volgorde aanpassen, uitverkocht zetten. Cijfers: omzet per uur, populairste gerechten, bereidingstijd.
+- Instellingen: restaurantnaam, bestellen open/dicht, drempel "te lang".
+
+**Demo (`/demo`)**: gsm en keukentablet naast elkaar, met een knop die een drukke avond simuleert.
+
+### Database
+Migratie `drizzle/migrations/0001_prototype.sql` moet op de database toegepast zijn. Ze voegt toe:
+`settings.ordering_open`, `settings.late_after_minutes`, `orders.paid_at`, `orders.ready_at`, status `geannuleerd`,
+de functie `table_bill(_table)` en een aangepaste `place_order` (weigert bestellingen als bestellen gepauzeerd is).

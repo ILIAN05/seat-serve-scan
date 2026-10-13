@@ -102,6 +102,9 @@
 }
 
 @layer base {
+  html {
+    background-color: var(--color-background);
+  }
   * {
     border-color: var(--color-border);
   }
@@ -132,4 +135,12 @@
 
 @media print {
   .no-print { display: none !important; }
+}
+
+/* Rekening afdrukken vanuit het zaaloverzicht: enkel het rekeningvenster op papier */
+@media print {
+  body:has(#rekening) > :not(:has(#rekening)) { display: none !important; }
+  body:has(#rekening) .bg-black\/80 { display: none !important; }
+  body:has(#rekening) [role="dialog"] { position: static !important; transform: none !important; max-width: 100% !important; box-shadow: none !important; border: 0 !important; }
+  body:has(#rekening) [role="dialog"] > button { display: none !important; }
 }

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBeheerRouteImport } from './routes/_authenticated/beheer'
+import { Route as AuthenticatedDemoRouteImport } from './routes/_authenticated/demo'
 import { Route as AuthenticatedKeukenRouteImport } from './routes/_authenticated/keuken'
 import { Route as TafelNummerRouteImport } from './routes/tafel.$nummer'
 
@@ -35,6 +36,11 @@ const AuthenticatedBeheerRoute = AuthenticatedBeheerRouteImport.update({
   path: '/beheer',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDemoRoute = AuthenticatedDemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedKeukenRoute = AuthenticatedKeukenRouteImport.update({
   id: '/keuken',
   path: '/keuken',
@@ -50,6 +56,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/beheer': typeof AuthenticatedBeheerRoute
+  '/demo': typeof AuthenticatedDemoRoute
   '/keuken': typeof AuthenticatedKeukenRoute
   '/tafel/$nummer': typeof TafelNummerRoute
 }
@@ -57,6 +64,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/beheer': typeof AuthenticatedBeheerRoute
+  '/demo': typeof AuthenticatedDemoRoute
   '/keuken': typeof AuthenticatedKeukenRoute
   '/tafel/$nummer': typeof TafelNummerRoute
 }
@@ -66,20 +74,22 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/beheer': typeof AuthenticatedBeheerRoute
+  '/_authenticated/demo': typeof AuthenticatedDemoRoute
   '/_authenticated/keuken': typeof AuthenticatedKeukenRoute
   '/tafel/$nummer': typeof TafelNummerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/beheer' | '/keuken' | '/tafel/$nummer'
+  fullPaths: '/' | '/auth' | '/beheer' | '/demo' | '/keuken' | '/tafel/$nummer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/beheer' | '/keuken' | '/tafel/$nummer'
+  to: '/' | '/auth' | '/beheer' | '/demo' | '/keuken' | '/tafel/$nummer'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/beheer'
+    | '/_authenticated/demo'
     | '/_authenticated/keuken'
     | '/tafel/$nummer'
   fileRoutesById: FileRoutesById
@@ -121,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBeheerRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/demo': {
+      id: '/_authenticated/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof AuthenticatedDemoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/keuken': {
       id: '/_authenticated/keuken'
       path: '/keuken'
@@ -140,11 +157,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBeheerRoute: typeof AuthenticatedBeheerRoute
+  AuthenticatedDemoRoute: typeof AuthenticatedDemoRoute
   AuthenticatedKeukenRoute: typeof AuthenticatedKeukenRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBeheerRoute: AuthenticatedBeheerRoute,
+  AuthenticatedDemoRoute: AuthenticatedDemoRoute,
   AuthenticatedKeukenRoute: AuthenticatedKeukenRoute,
 }
 
