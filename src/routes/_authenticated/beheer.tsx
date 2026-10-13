@@ -47,8 +47,6 @@ function Admin() {
     },
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
-  qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
-  qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
 
   async function resetDemo() {
     if (!confirm("Alle bestellingen en tafelmeldingen van vandaag verwijderen? Handig om de demo opnieuw te starten.")) return;
@@ -78,6 +76,7 @@ function Admin() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild><Link to="/keuken">Keukenscherm</Link></Button>
+          <Button variant="outline" onClick={resetDemo}><Eraser className="h-4 w-4" /> Demo opruimen</Button>
           <Button variant="ghost" onClick={signOut}><LogOut className="h-4 w-4" /> Uitloggen</Button>
         </div>
       </header>
