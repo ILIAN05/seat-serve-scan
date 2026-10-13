@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 import { toast } from "sonner";
 import { Download, LogOut, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -221,7 +220,7 @@ function Tables({ count, onChange }: { count: number; onChange: () => void }) {
   const [codes, setCodes] = useState<string[]>([]);
   useEffect(() => {
     const origin = window.location.origin;
-    Promise.all(Array.from({ length: count }, (_, i) => QRCode.toDataURL(`${origin}/tafel/${i + 1}`, { width: 600, margin: 2, color: { dark: "#3b2a1a", light: "#ffffff" } }))).then(setCodes);
+    import("qrcode").then(({ default: QRCode }) => Promise.all(Array.from({ length: count }, (_, i) => QRCode.toDataURL(`${origin}/tafel/${i + 1}`, { width: 600, margin: 2, color: { dark: "#3b2a1a", light: "#ffffff" } })))).then(setCodes);
   }, [count]);
 
   async function save() {
