@@ -1,10 +1,3 @@
--- 0001: uitbreidingen voor het prototype
--- * bestellen pauzeren (settings.ordering_open) en drempel "te laat" voor de keuken
--- * bestellingen annuleren (status 'geannuleerd')
--- * tijdstip klaar (ready_at) voor bereidingstijd-statistieken
--- * afrekenen per tafel (paid_at)
--- * table_bill(): lopende rekening van één tafel voor de gasten
-
 alter table public.settings add column if not exists ordering_open boolean not null default true;
 alter table public.settings add column if not exists late_after_minutes int not null default 15;
 alter table public.settings drop constraint if exists settings_late_after_minutes_check;
@@ -19,7 +12,6 @@ create index if not exists orders_created_at_idx on public.orders (created_at);
 create index if not exists orders_unpaid_table_idx on public.orders (table_number) where paid_at is null;
 create index if not exists order_items_order_id_idx on public.order_items (order_id);
 
--- updated_at bijhouden en ready_at zetten wanneer een bestelling klaar is
 create or replace function public.touch_updated_at() returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at = now();
@@ -31,7 +23,6 @@ begin
   return new;
 end $$;
 
--- place_order: weigert bestellingen wanneer het restaurant bestellen gepauzeerd heeft
 create or replace function public.place_order(_table int, _items jsonb)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare _id uuid; _it jsonb; _d record; _total numeric := 0; _max int; _open boolean;
@@ -55,14 +46,10 @@ begin
 end $$;
 grant execute on function public.place_order(int, jsonb) to anon, authenticated;
 
--- table_bill: alle nog niet afgerekende bestellingen van één tafel (laatste 12 uur), met gerechten
 create or replace function public.table_bill(_table int)
 returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object(
-      'id', o.id,
-      'status', o.status,
-      'total', o.total,
-      'created_at', o.created_at,
+      'id', o.id, 'status', o.status, 'total', o.total, 'created_at', o.created_at,
       'items', (
         select coalesce(jsonb_agg(jsonb_build_object(
           'id', i.id, 'dish_name', i.dish_name, 'unit_price', i.unit_price, 'quantity', i.quantity, 'note', i.note
@@ -71,11 +58,8 @@ returns jsonb language sql stable security definer set search_path = public as $
       )
     ) order by o.created_at), '[]'::jsonb)
   from orders o
-  where o.table_number = _table
-    and o.paid_at is null
-    and o.created_at > now() - interval '12 hours';
+  where o.table_number = _table and o.paid_at is null and o.created_at > now() - interval '12 hours';
 $$;
 grant execute on function public.table_bill(int) to anon, authenticated;
 
--- gasten zien live of bestellen open of gepauzeerd is
 alter publication supabase_realtime add table public.settings;
