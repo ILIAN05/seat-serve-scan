@@ -102,19 +102,8 @@ function TablePage() {
     enabled: valid,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("table_bill", { _table: table });
-      if (!error) return parseBill(data);
-      // Terugval zolang migratie 0001 (table_bill) nog niet op de database staat
-      const since = new Date(Date.now() - 12 * 3600_000).toISOString();
-      const fb = await supabase
-        .from("orders")
-        .select("*, order_items(*)")
-        .eq("table_number", table)
-        .gte("created_at", since)
-        .order("created_at");
-      if (fb.error) throw fb.error;
-      return parseBill(
-        fb.data.filter((o) => !o.paid_at).map((o) => ({ ...o, items: o.order_items })),
-      );
+      if (error) throw error;
+      return parseBill(data);
     },
     refetchInterval: 15_000, // vangnet als de live-verbinding wegvalt
   });

@@ -24,7 +24,6 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,18 +31,10 @@ function AuthPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setBusy(false);
-      if (error) { toast.error("Inloggen mislukt. Controleer je e-mail en wachtwoord."); return; }
-      navigate({ to: redirect });
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + redirect } });
-      setBusy(false);
-      if (error) { toast.error(error.message); return; }
-      if (data.session) navigate({ to: redirect });
-      else toast.success("Account aangemaakt. Bevestig je e-mailadres via de link in je mailbox.");
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    if (error) { toast.error("Inloggen mislukt. Controleer je e-mail en wachtwoord."); return; }
+    navigate({ to: redirect });
   }
 
   return (
@@ -51,8 +42,8 @@ function AuthPage() {
       <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-3xl border bg-card p-8 shadow-soft">
         <div>
           <div className="mb-3 h-1.5 w-12 rounded-full bg-oak-gradient" />
-          <h1 className="text-3xl font-semibold">{mode === "login" ? "Inloggen" : "Account aanmaken"}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Voor personeel van Bistro De Houder</p>
+          <h1 className="text-3xl font-semibold">Inloggen</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Alleen voor personeel van Bistro De Houder</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
@@ -62,12 +53,7 @@ function AuthPage() {
           <Label htmlFor="pw">Wachtwoord</Label>
           <Input id="pw" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        <Button type="submit" className="w-full" size="lg" disabled={busy}>
-          {mode === "login" ? "Inloggen" : "Account aanmaken"}
-        </Button>
-        <button type="button" className="w-full text-sm text-muted-foreground underline-offset-4 hover:underline" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
-          {mode === "login" ? "Nog geen account? Maak er een aan" : "Al een account? Log in"}
-        </button>
+        <Button type="submit" className="w-full" size="lg" disabled={busy}>Inloggen</Button>
       </form>
     </main>
   );
