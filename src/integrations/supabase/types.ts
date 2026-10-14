@@ -131,8 +131,6 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          paid_at: string | null
-          ready_at: string | null
           status: string
           table_number: number
           total: number
@@ -141,8 +139,6 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          paid_at?: string | null
-          ready_at?: string | null
           status?: string
           table_number: number
           total?: number
@@ -151,8 +147,6 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          paid_at?: string | null
-          ready_at?: string | null
           status?: string
           table_number?: number
           total?: number
@@ -163,22 +157,16 @@ export type Database = {
       settings: {
         Row: {
           id: number
-          late_after_minutes: number
-          ordering_open: boolean
           restaurant_name: string
           table_count: number
         }
         Insert: {
           id?: number
-          late_after_minutes?: number
-          ordering_open?: boolean
           restaurant_name?: string
           table_count?: number
         }
         Update: {
           id?: number
-          late_after_minutes?: number
-          ordering_open?: boolean
           restaurant_name?: string
           table_count?: number
         }
@@ -214,7 +202,6 @@ export type Database = {
     }
     Functions: {
       place_order: { Args: { _items: Json; _table: number }; Returns: string }
-      table_bill: { Args: { _table: number }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
