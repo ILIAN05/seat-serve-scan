@@ -193,6 +193,10 @@ export function orderErrorMessage(message: string | undefined) {
   if (/gesloten/i.test(message)) return "De keuken neemt momenteel geen bestellingen aan.";
   if (/niet beschikbaar/i.test(message))
     return "Een gerecht in je mandje is net uitverkocht. Kijk je mandje even na.";
+  if (/te veel bestellingen/i.test(message))
+    return "Je tafel heeft net veel bestellingen geplaatst. Wacht even of roep de ober.";
+  if (/ongeldig aantal|te veel regels/i.test(message))
+    return "Je mandje is te groot. Verdeel je bestelling of vraag de ober.";
   if (/ongeldige tafel/i.test(message)) return "Deze tafel bestaat niet. Scan de QR-code opnieuw.";
   return "Bestellen lukte niet. Probeer opnieuw.";
 }

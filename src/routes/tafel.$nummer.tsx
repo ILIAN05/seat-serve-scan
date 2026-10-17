@@ -225,9 +225,13 @@ function TablePage() {
   const openOrders = bill.filter((o) => o.status === "ontvangen" || o.status === "in_bereiding");
 
   async function sendRequest(type: RequestType) {
-    const { error } = await supabase.from("table_requests").insert({ table_number: table, type });
+    const { error } = await supabase.rpc("request_service", { _table: table, _type: type });
     if (error) {
-      toast.error("Melding versturen lukte niet. Probeer opnieuw.");
+      toast.error(
+        /te veel/i.test(error.message)
+          ? "Je hebt al meerdere meldingen gestuurd. Wacht even, de ober komt eraan."
+          : "Melding versturen lukte niet. Probeer opnieuw.",
+      );
       return;
     }
     setCooldown((c) => ({ ...c, [type]: Date.now() }));
@@ -245,6 +249,7 @@ function TablePage() {
     const { data, error } = await supabase.rpc("place_order", {
       _table: table,
       _items: cart.map((l) => ({ dish_id: l.dishId, quantity: l.quantity, note: l.note })),
+      _allergies: avoid,
     });
     setBusy(false);
     if (error || !data) {

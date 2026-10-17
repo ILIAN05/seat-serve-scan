@@ -23,6 +23,9 @@ import {
 } from "@/lib/menu";
 import type { AdminOrder, AdminRequest } from "./types";
 
+type Method = "kaart" | "cash" | "payconiq";
+const METHOD_LABEL: Record<Method, string> = { kaart: "Kaart", cash: "Cash", payconiq: "Payconiq" };
+
 type TableState = {
   table: number;
   orders: AdminOrder[];
@@ -144,38 +147,26 @@ function TableDialog({
     (o) => o.status === "ontvangen" || o.status === "in_bereiding",
   );
 
+  const [method, setMethod] = useState<Method>("kaart");
+
   async function settle() {
     if (!state) return;
     if (stillCooking && !confirm("Er zijn nog bestellingen in de keuken. Toch afrekenen?")) return;
     setBusy(true);
-    const ids = state.orders.map((o) => o.id);
-    const { error } = await supabase
-      .from("orders")
-      .update({ paid_at: new Date().toISOString() })
-      .in("id", ids);
-    if (!error)
-      await supabase
-        .from("table_requests")
-        .update({ handled: true })
-        .eq("table_number", state.table)
-        .eq("handled", false);
+    const { error } = await supabase.rpc("settle_table", { _table: state.table, _method: method });
     setBusy(false);
     if (error) {
       toast.error("Afrekenen mislukt. Probeer opnieuw.");
       return;
     }
-    toast.success(`Tafel ${state.table} afgerekend (${euro(state.total)}). De tafel is weer vrij.`);
+    toast.success(`Tafel ${state.table} afgerekend met ${METHOD_LABEL[method]} (${euro(state.total)}). De tafel is weer vrij.`);
     onChange();
     onClose();
   }
 
   async function handleRequests() {
     if (!state) return;
-    await supabase
-      .from("table_requests")
-      .update({ handled: true })
-      .eq("table_number", state.table)
-      .eq("handled", false);
+    await supabase.rpc("handle_requests", { _table: state.table });
     onChange();
   }
 
@@ -261,6 +252,22 @@ function TableDialog({
                 <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="h-4 w-4" /> Afdrukken
                 </Button>
+              )}
+              {state.orders.length > 0 && (
+                <div className="flex gap-1 rounded-lg border p-1" role="radiogroup" aria-label="Betaalmethode">
+                  {(Object.keys(METHOD_LABEL) as Method[]).map((m) => (
+                    <Button
+                      key={m}
+                      size="sm"
+                      variant={method === m ? "default" : "ghost"}
+                      role="radio"
+                      aria-checked={method === m}
+                      onClick={() => setMethod(m)}
+                    >
+                      {METHOD_LABEL[m]}
+                    </Button>
+                  ))}
+                </div>
               )}
               {state.orders.length > 0 && (
                 <Button onClick={settle} disabled={busy}>
