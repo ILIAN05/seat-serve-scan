@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Download, Printer } from "lucide-react";
+import { Download, Printer, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+/** Publiek adres van de app, ook als beheer in een preview geopend wordt. */
+const PUBLIC_ORIGIN = "https://seat-serve-scan.lovable.app";
+
+const isPreview = (origin: string) =>
+  /lovableproject\.com|id-preview--|localhost|127\.0\.0\.1/.test(origin);
+
+/** Link die in de QR-code van een tafel komt. */
+const tableUrl = (origin: string, table: number, code: string) =>
+  `${origin}/tafel/${table}?k=${encodeURIComponent(code)}`;
 
 export function QrTables({
   count,
@@ -16,25 +27,51 @@ export function QrTables({
   restaurant: string;
   onChange: () => void;
 }) {
+  const qc = useQueryClient();
   const [n, setN] = useState(count);
-  const [codes, setCodes] = useState<string[]>([]);
+  const [origin, setOrigin] = useState(PUBLIC_ORIGIN);
+  const [images, setImages] = useState<Record<number, string>>({});
   useEffect(() => setN(count), [count]);
   useEffect(() => {
-    const origin = window.location.origin;
+    const own = window.location.origin;
+    setOrigin(isPreview(own) ? PUBLIC_ORIGIN : own);
+  }, []);
+
+  const { data: codes } = useQuery({
+    queryKey: ["table-codes", count],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("table_codes")
+        .select("table_number, code")
+        .lte("table_number", count)
+        .order("table_number");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (!codes) return;
+    let cancelled = false;
     import("qrcode")
       .then(({ default: QRCode }) =>
         Promise.all(
-          Array.from({ length: count }, (_, i) =>
-            QRCode.toDataURL(`${origin}/tafel/${i + 1}`, {
+          codes.map(async (c) => {
+            const src = await QRCode.toDataURL(tableUrl(origin, c.table_number, c.code), {
               width: 600,
               margin: 2,
+              errorCorrectionLevel: "M",
               color: { dark: "#3b2a1a", light: "#ffffff" },
-            }),
-          ),
+            });
+            return [c.table_number, src] as const;
+          }),
         ),
       )
-      .then(setCodes);
-  }, [count]);
+      .then((pairs) => !cancelled && setImages(Object.fromEntries(pairs)));
+    return () => {
+      cancelled = true;
+    };
+  }, [codes, origin]);
 
   async function save() {
     const v = Math.max(1, Math.min(200, Math.round(n)));
@@ -45,6 +82,22 @@ export function QrTables({
     }
     toast.success(`Aantal tafels: ${v}`);
     onChange();
+  }
+
+  async function regenerate(table: number) {
+    if (
+      !confirm(
+        `Nieuwe QR-code voor tafel ${table} maken? De huidige code van deze tafel werkt daarna niet meer: print de nieuwe en vervang hem in de tafelhouder.`,
+      )
+    )
+      return;
+    const { error } = await supabase.rpc("regenerate_table_code", { _table: table });
+    if (error) {
+      toast.error("Nieuwe code maken mislukt");
+      return;
+    }
+    toast.success(`Tafel ${table} heeft een nieuwe QR-code`);
+    qc.invalidateQueries({ queryKey: ["table-codes"] });
   }
 
   return (
@@ -65,37 +118,65 @@ export function QrTables({
         <Button onClick={save} disabled={n === count}>
           Opslaan
         </Button>
-        <Button variant="outline" onClick={() => window.print()}>
+        <Button variant="outline" onClick={() => window.print()} disabled={!codes}>
           <Printer className="h-4 w-4" /> Alles printen
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground no-print">
-        Print de codes en steek ze in de tafelhouders. Elke code opent het menu voor die tafel.
-      </p>
+      <div className="space-y-1 text-sm text-muted-foreground no-print">
+        <p>
+          Print de codes en steek ze in de tafelhouders. Elke code bevat een geheime tafelcode:
+          alleen wie aan de tafel zit, kan bestellen of de rekening van die tafel zien.
+        </p>
+        <p>
+          Codes verwijzen naar <span className="font-medium text-foreground">{origin}</span>. Ligt
+          een code ergens rond of werd ze gefotografeerd? Maak voor die tafel een nieuwe.
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3">
-        {codes.map((src, i) => (
-          <div
-            key={i}
-            className="flex flex-col items-center rounded-2xl border bg-card p-4 text-center break-inside-avoid"
-          >
-            <p className="font-display text-sm text-muted-foreground">{restaurant}</p>
-            <img src={src} alt={`QR-code tafel ${i + 1}`} className="my-2 w-full max-w-48" />
-            <p className="font-display text-2xl font-semibold">Tafel {i + 1}</p>
-            <p className="text-xs text-muted-foreground">Scan & bestel</p>
-            <div className="mt-3 flex gap-1 no-print">
-              <Button size="sm" variant="outline" asChild>
-                <a href={src} download={`tafel-${i + 1}.png`}>
-                  <Download className="h-4 w-4" /> PNG
-                </a>
-              </Button>
-              <Button size="sm" variant="ghost" asChild>
-                <Link to="/tafel/$nummer" params={{ nummer: String(i + 1) }} target="_blank">
-                  Open
-                </Link>
-              </Button>
+        {(codes ?? []).map(({ table_number: t }) => {
+          const src = images[t];
+          return (
+            <div
+              key={t}
+              className="flex flex-col items-center rounded-2xl border bg-card p-4 text-center break-inside-avoid"
+            >
+              <p className="font-display text-sm text-muted-foreground">{restaurant}</p>
+              {src ? (
+                <img src={src} alt={`QR-code tafel ${t}`} className="my-2 w-full max-w-48" />
+              ) : (
+                <div className="my-2 aspect-square w-full max-w-48 animate-pulse rounded-lg bg-muted" />
+              )}
+              <p className="font-display text-2xl font-semibold">Tafel {t}</p>
+              <p className="text-xs text-muted-foreground">Scan & bestel</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-1 no-print">
+                <Button size="sm" variant="outline" asChild disabled={!src}>
+                  <a href={src} download={`tafel-${t}.png`}>
+                    <Download className="h-4 w-4" /> PNG
+                  </a>
+                </Button>
+                <Button size="sm" variant="ghost" asChild>
+                  <Link
+                    to="/tafel/$nummer"
+                    params={{ nummer: String(t) }}
+                    search={{ k: codes!.find((c) => c.table_number === t)!.code }}
+                    target="_blank"
+                  >
+                    Open
+                  </Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Nieuwe QR-code voor tafel ${t}`}
+                  title="Nieuwe code"
+                  onClick={() => regenerate(t)}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

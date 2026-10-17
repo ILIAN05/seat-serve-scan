@@ -32,8 +32,11 @@ import {
   allergenInfo,
   billLines,
   billTotal,
+  cartCount,
   cartTotal,
   euro,
+  MAX_PER_LINE,
+  MAX_PER_ORDER,
   orderErrorMessage,
   parseBill,
   pruneCart,
@@ -45,7 +48,12 @@ import {
   type CartLine,
 } from "@/lib/menu";
 
+type TableSearch = { k?: string };
+
 export const Route = createFileRoute("/tafel/$nummer")({
+  // `k` is de geheime tafelcode uit de QR-code. Zonder geldige code kan een gast niet bestellen.
+  validateSearch: (s: Record<string, unknown>): TableSearch =>
+    typeof s["k"] === "string" && /^[a-z0-9]{1,64}$/i.test(s["k"]) ? { k: s["k"] } : {},
   head: ({ params }) => ({
     meta: [
       { title: `Tafel ${params.nummer} – Bistro De Houder` },
@@ -74,6 +82,8 @@ const REQUEST_COOLDOWN_MS = 60_000;
 
 function TablePage() {
   const { nummer } = Route.useParams();
+  const { k: code } = Route.useSearch();
+  const codeArg = code ? { _code: code } : {};
   const table = Number(nummer);
   const qc = useQueryClient();
   const { data: settings } = useSettings();
@@ -89,6 +99,9 @@ function TablePage() {
       if (d.error) throw d.error;
       return { categories: c.data, dishes: d.data as Dish[] };
     },
+    // Live-updates bereiken gasten niet wanneer een gerecht onzichtbaar wordt (uitverkocht),
+    // dus het menu wordt ook regelmatig opnieuw opgehaald.
+    refetchInterval: 30_000,
   });
 
   const valid =
@@ -97,18 +110,29 @@ function TablePage() {
   const restaurant = settings?.restaurant_name ?? "Bistro De Houder";
 
   // Lopende rekening van deze tafel (alle gsm's aan tafel zien hetzelfde)
-  const { data: bill = [] } = useQuery({
-    queryKey: ["bill", table],
+  // Gasten mogen de tabel met bestellingen niet lezen (dus ook geen live-updates ervan krijgen);
+  // de status komt via `table_bill`, vaker opgehaald zolang er iets in de keuken is.
+  const { data: bill = [], error: billError } = useQuery({
+    queryKey: ["bill", table, code],
     enabled: valid,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("table_bill", { _table: table });
-      if (error) throw error;
+      const { data, error } = await supabase.rpc("table_bill", { _table: table, ...codeArg });
+      if (error) throw new Error(error.message);
       return parseBill(data);
     },
-    refetchInterval: 15_000, // vangnet als de live-verbinding wegvalt
+    retry: (n, e) => !/tafelcode/i.test(e.message) && n < 3,
+    refetchInterval: (q) => {
+      if (q.state.error) return false;
+      const open = (q.state.data ?? []).some(
+        (o) => o.status === "ontvangen" || o.status === "in_bereiding",
+      );
+      return open ? 8_000 : 20_000;
+    },
   });
+  const [codeRejected, setCodeRejected] = useState(false);
+  const badCode = codeRejected || /tafelcode/i.test(billError?.message ?? "");
 
-  // Realtime: menu en bestellingen van deze tafel
+  // Realtime: menu (een gerecht dat weer beschikbaar wordt, nieuwe categorieën)
   useEffect(() => {
     const ch = supabase
       .channel(`tafel-${table}`)
@@ -117,11 +141,6 @@ function TablePage() {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () =>
         qc.invalidateQueries({ queryKey: ["menu"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `table_number=eq.${table}` },
-        () => qc.invalidateQueries({ queryKey: ["bill", table] }),
       )
       .subscribe();
     return () => {
@@ -220,13 +239,19 @@ function TablePage() {
   }, [activeCat]);
 
   const total = cartTotal(cart);
-  const count = cart.reduce((s, l) => s + l.quantity, 0);
+  const count = cartCount(cart);
+  const tooMany = count > MAX_PER_ORDER;
   const tableTotal = billTotal(bill);
   const openOrders = bill.filter((o) => o.status === "ontvangen" || o.status === "in_bereiding");
 
   async function sendRequest(type: RequestType) {
-    const { error } = await supabase.rpc("request_service", { _table: table, _type: type });
+    const { error } = await supabase.rpc("request_service", {
+      _table: table,
+      _type: type,
+      ...codeArg,
+    });
     if (error) {
+      if (/tafelcode/i.test(error.message)) return setCodeRejected(true);
       toast.error(
         /te veel/i.test(error.message)
           ? "Je hebt al meerdere meldingen gestuurd. Wacht even, de ober komt eraan."
@@ -244,14 +269,16 @@ function TablePage() {
   }
 
   async function placeOrder() {
-    if (busy || !cart.length) return;
+    if (busy || !cart.length || tooMany) return;
     setBusy(true);
     const { data, error } = await supabase.rpc("place_order", {
       _table: table,
       _items: cart.map((l) => ({ dish_id: l.dishId, quantity: l.quantity, note: l.note })),
       _allergies: avoid,
+      ...codeArg,
     });
     setBusy(false);
+    if (error && /tafelcode/i.test(error.message)) return setCodeRejected(true);
     if (error || !data) {
       toast.error(orderErrorMessage(error?.message));
       qc.invalidateQueries({ queryKey: ["menu"] });
@@ -262,15 +289,21 @@ function TablePage() {
     setCartOpen(false);
     setTableOpen(true);
     toast.success("Je bestelling is doorgestuurd naar de keuken!");
-    qc.invalidateQueries({ queryKey: ["bill", table] });
+    qc.invalidateQueries({ queryKey: ["bill", table, code] });
   }
 
-  if (settings && !valid) {
+  if ((settings && !valid) || badCode) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
-        <div>
-          <h1 className="text-3xl font-semibold">Onbekende tafel</h1>
-          <p className="mt-2 text-muted-foreground">Scan de QR-code op je tafel opnieuw.</p>
+        <div className="max-w-sm">
+          <h1 className="text-3xl font-semibold">
+            {badCode ? "QR-code niet geldig" : "Onbekende tafel"}
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            {badCode
+              ? "Deze link hoort niet (meer) bij een tafel. Scan de QR-code op je tafel opnieuw of vraag het aan onze medewerkers."
+              : "Scan de QR-code op je tafel opnieuw."}
+          </p>
         </div>
       </main>
     );
@@ -534,10 +567,11 @@ function TablePage() {
                     onClick={() =>
                       setCart((c) =>
                         c.map((x, j) =>
-                          j === i ? { ...x, quantity: Math.min(50, x.quantity + 1) } : x,
+                          j === i ? { ...x, quantity: Math.min(MAX_PER_LINE, x.quantity + 1) } : x,
                         ),
                       )
                     }
+                    disabled={l.quantity >= MAX_PER_LINE}
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -558,10 +592,15 @@ function TablePage() {
                 Bestellen is momenteel gepauzeerd.
               </p>
             )}
+            {tooMany && (
+              <p className="text-center text-sm font-medium text-destructive">
+                Maximaal {MAX_PER_ORDER} stuks per bestelling. Verdeel je bestelling in twee rondes.
+              </p>
+            )}
             <Button
               size="lg"
               className="h-14 w-full rounded-2xl text-base"
-              disabled={!count || busy || !orderingOpen}
+              disabled={!count || busy || !orderingOpen || tooMany}
               onClick={placeOrder}
             >
               {busy ? "Bezig met versturen…" : "Bestelling plaatsen"}
@@ -698,7 +737,8 @@ function AddDialog({
                   variant="ghost"
                   className="rounded-full"
                   aria-label="Meer"
-                  onClick={() => setQ(Math.min(50, q + 1))}
+                  onClick={() => setQ(Math.min(MAX_PER_LINE, q + 1))}
+                  disabled={q >= MAX_PER_LINE}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>

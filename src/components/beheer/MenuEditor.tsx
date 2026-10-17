@@ -25,6 +25,10 @@ import {
 import { ALLERGENS, allergenInfo, euro } from "@/lib/menu";
 import type { Cat, Dish } from "./types";
 
+/** De validatie in de database geeft Nederlandstalige meldingen; toon die, anders een algemene. */
+const friendly = (message: string, fallback: string) =>
+  /tekens|prijs|allergeen|foto-url/i.test(message) ? message : fallback;
+
 /** Verplaatst element `i` één plaats en schrijft de nieuwe volgorde (1, 2, 3, …) weg voor alles wat veranderde. */
 async function move<T extends { id: string; sort_order: number }>(
   table: "dishes" | "categories",
@@ -64,7 +68,7 @@ export function MenuEditor({
       sort_order: Math.max(0, ...cats.map((c) => c.sort_order)) + 1,
     });
     if (error) {
-      toast.error("Categorie toevoegen mislukt");
+      toast.error(friendly(error.message, "Categorie toevoegen mislukt"));
       return;
     }
     setNewCat("");
@@ -73,12 +77,17 @@ export function MenuEditor({
   async function renameCat(c: Cat) {
     const name = prompt("Nieuwe naam voor categorie", c.name);
     if (!name?.trim()) return;
-    await supabase.from("categories").update({ name: name.trim() }).eq("id", c.id);
+    const { error } = await supabase
+      .from("categories")
+      .update({ name: name.trim() })
+      .eq("id", c.id);
+    if (error) toast.error(friendly(error.message, "Hernoemen mislukt"));
     onChange();
   }
   async function delCat(c: Cat) {
     if (!confirm(`Categorie "${c.name}" en alle gerechten erin verwijderen?`)) return;
-    await supabase.from("categories").delete().eq("id", c.id);
+    const { error } = await supabase.from("categories").delete().eq("id", c.id);
+    if (error) toast.error("Verwijderen mislukt");
     onChange();
   }
   async function toggle(d: Dish, v: boolean) {
@@ -96,7 +105,8 @@ export function MenuEditor({
   }
   async function delDish(d: Dish) {
     if (!confirm(`"${d.name}" verwijderen?`)) return;
-    await supabase.from("dishes").delete().eq("id", d.id);
+    const { error } = await supabase.from("dishes").delete().eq("id", d.id);
+    if (error) toast.error("Verwijderen mislukt");
     onChange();
   }
 
@@ -315,7 +325,7 @@ function DishDialog({
           .eq("id", f.id)
       : await supabase.from("dishes").insert({ ...row, sort_order: sortOrder });
     if (error) {
-      toast.error("Opslaan mislukt");
+      toast.error(friendly(error.message, "Opslaan mislukt"));
       return;
     }
     toast.success("Opgeslagen");

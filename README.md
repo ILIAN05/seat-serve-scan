@@ -104,7 +104,15 @@ npm run dev
 
 **Demo (`/demo`)**: gsm en keukentablet naast elkaar, met een knop die een drukke avond simuleert.
 
+### Beveiliging en demomodus (migratie 0004)
+- **Geheime tafelcode in elke QR-code** (`/tafel/7?k=…`). Wie enkel het tafelnummer kent, kan niet bestellen, de ober roepen of de rekening van die tafel zien. In Beheer → QR-codes maak je per tafel een nieuwe code als een QR ergens rondslingert; de oude werkt dan meteen niet meer.
+- **Limieten**: max. 20 stuks per gerecht, 60 per bestelling en 12 bestellingen per tafel per 10 minuten. De gsm toont dezelfde grenzen als de server.
+- **Demomodus** (Beheer → Instellingen): enkel als die aan staat, kan je een drukke avond simuleren, de dag opruimen en opent de startpagina een demotafel. Zet hem uit voor een echt restaurant: dan kan niemand nog bestellingen of betalingen wissen.
+- Personeel past bestellingen, meldingen en betalingen enkel nog aan via de databasefuncties; afgevinkte gerechten in de keuken worden op de server bewaard, zodat elke tablet hetzelfde ziet.
+- Keuken en zaal tonen ook tafels die over middernacht heen open staan; het afgerekende bedrag komt van de server.
+
 ### Database
-Migratie `drizzle/migrations/0001_prototype.sql` moet op de database toegepast zijn. Ze voegt toe:
-`settings.ordering_open`, `settings.late_after_minutes`, `orders.paid_at`, `orders.ready_at`, status `geannuleerd`,
+Migraties `drizzle/migrations/0001_prototype.sql` t.e.m. `0004_table_codes.sql` moeten op de database toegepast zijn. **Na 0004 werken de oude QR-codes (zonder `?k=`) niet meer: print ze opnieuw vanuit Beheer → QR-codes.**
+
+Migratie 0001 voegt toe: `settings.ordering_open`, `settings.late_after_minutes`, `orders.paid_at`, `orders.ready_at`, status `geannuleerd`,
 de functie `table_bill(_table)` en een aangepaste `place_order` (weigert bestellingen als bestellen gepauzeerd is).

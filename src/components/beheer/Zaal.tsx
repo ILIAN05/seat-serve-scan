@@ -15,6 +15,7 @@ import {
   billLines,
   billTotal,
   euro,
+  isOpenBill,
   minutesSince,
   duurLabel,
   STATUS_LABEL,
@@ -52,7 +53,7 @@ export function Zaal({
     () =>
       Array.from({ length: tableCount }, (_, i) => {
         const t = i + 1;
-        const own = orders.filter((o) => o.table_number === t && !o.paid_at);
+        const own = orders.filter((o) => o.table_number === t && isOpenBill(o));
         return {
           table: t,
           orders: own,
@@ -153,20 +154,33 @@ function TableDialog({
     if (!state) return;
     if (stillCooking && !confirm("Er zijn nog bestellingen in de keuken. Toch afrekenen?")) return;
     setBusy(true);
-    const { error } = await supabase.rpc("settle_table", { _table: state.table, _method: method });
+    const { data, error } = await supabase.rpc("settle_table", {
+      _table: state.table,
+      _method: method,
+    });
     setBusy(false);
     if (error) {
-      toast.error("Afrekenen mislukt. Probeer opnieuw.");
+      toast.error(
+        /niets af te rekenen/i.test(error.message)
+          ? "Deze tafel heeft niets meer openstaan."
+          : "Afrekenen mislukt. Probeer opnieuw.",
+      );
+      onChange();
       return;
     }
-    toast.success(`Tafel ${state.table} afgerekend met ${METHOD_LABEL[method]} (${euro(state.total)}). De tafel is weer vrij.`);
+    // Het bedrag komt van de server: dat is wat in het betalingslog staat.
+    const amount = Number((data as { amount?: number | string } | null)?.amount ?? state.total);
+    toast.success(
+      `Tafel ${state.table} afgerekend met ${METHOD_LABEL[method]} (${euro(amount)}). De tafel is weer vrij.`,
+    );
     onChange();
     onClose();
   }
 
   async function handleRequests() {
     if (!state) return;
-    await supabase.rpc("handle_requests", { _table: state.table });
+    const { error } = await supabase.rpc("handle_requests", { _table: state.table });
+    if (error) toast.error("Afhandelen mislukt. Probeer opnieuw.");
     onChange();
   }
 
@@ -254,7 +268,11 @@ function TableDialog({
                 </Button>
               )}
               {state.orders.length > 0 && (
-                <div className="flex gap-1 rounded-lg border p-1" role="radiogroup" aria-label="Betaalmethode">
+                <div
+                  className="flex gap-1 rounded-lg border p-1"
+                  role="radiogroup"
+                  aria-label="Betaalmethode"
+                >
                   {(Object.keys(METHOD_LABEL) as Method[]).map((m) => (
                     <Button
                       key={m}

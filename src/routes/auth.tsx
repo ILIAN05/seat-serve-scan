@@ -8,7 +8,12 @@ import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>) => ({
-    redirect: typeof s["redirect"] === "string" && s["redirect"].startsWith("/") && !s["redirect"].startsWith("//") ? s["redirect"] : "/keuken",
+    redirect:
+      typeof s["redirect"] === "string" &&
+      s["redirect"].startsWith("/") &&
+      !s["redirect"].startsWith("//")
+        ? s["redirect"]
+        : "/keuken",
   }),
   head: () => ({
     meta: [
@@ -33,27 +38,50 @@ function AuthPage() {
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) { toast.error("Inloggen mislukt. Controleer je e-mail en wachtwoord."); return; }
+    if (error) {
+      toast.error("Inloggen mislukt. Controleer je e-mail en wachtwoord.");
+      return;
+    }
     navigate({ to: redirect });
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-3xl border bg-card p-8 shadow-soft">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-sm space-y-5 rounded-3xl border bg-card p-8 shadow-soft"
+      >
         <div>
           <div className="mb-3 h-1.5 w-12 rounded-full bg-oak-gradient" />
           <h1 className="text-3xl font-semibold">Inloggen</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Alleen voor personeel van Bistro De Houder</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Alleen voor personeel van Bistro De Houder
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
-          <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="pw">Wachtwoord</Label>
-          <Input id="pw" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input
+            id="pw"
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </div>
-        <Button type="submit" className="w-full" size="lg" disabled={busy}>Inloggen</Button>
+        <Button type="submit" className="w-full" size="lg" disabled={busy}>
+          Inloggen
+        </Button>
       </form>
     </main>
   );

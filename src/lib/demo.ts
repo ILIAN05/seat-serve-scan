@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { MAX_PER_LINE } from "@/lib/menu";
 
 type DemoDish = { id: string; name: string; category_id: string };
 
@@ -33,7 +34,11 @@ export function randomOrder(dishes: DemoDish[], categories: { id: string; name: 
     if (!d) return;
     const key = `${d.id}|${note}`;
     const cur = lines.get(key);
-    lines.set(key, { dish_id: d.id, quantity: Math.min(50, (cur?.quantity ?? 0) + q), note });
+    lines.set(key, {
+      dish_id: d.id,
+      quantity: Math.min(MAX_PER_LINE, (cur?.quantity ?? 0) + q),
+      note,
+    });
   };
   const roll = Math.random();
   if (roll < 0.2 && desserts.length) {
@@ -56,12 +61,13 @@ export async function simulateRush({
   onProgress,
 }: { count?: number; delayMs?: number; onProgress?: (done: number) => void } = {}) {
   const [{ data: settings }, { data: dishes }, { data: categories }] = await Promise.all([
-    supabase.from("settings").select("table_count, ordering_open").eq("id", 1).single(),
+    supabase.from("settings").select("table_count, ordering_open, demo_mode").eq("id", 1).single(),
     supabase.from("dishes").select("id, name, category_id").eq("available", true),
     supabase.from("categories").select("id, name"),
   ]);
   if (!settings || !dishes?.length || !categories)
     throw new Error("Geen menu gevonden om te bestellen.");
+  if (!settings.demo_mode) throw new Error("Zet eerst de demomodus aan (Beheer → Instellingen).");
   if (!settings.ordering_open) throw new Error("Bestellen is gepauzeerd. Zet het eerst weer open.");
   let done = 0;
   for (let i = 0; i < count; i++) {

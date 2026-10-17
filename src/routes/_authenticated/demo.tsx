@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, Eraser, ExternalLink, RotateCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,22 @@ function Demo() {
   const [reloadKey, setReloadKey] = useState(0);
   const phone = useFit(PHONE_FRAME);
   const kitchen = useFit(KITCHEN);
+  const demoOn = settings?.demo_mode ?? true;
+
+  // De gsm opent de tafel met haar echte QR-link, zoals een gast die de code scant.
+  const { data: code } = useQuery({
+    queryKey: ["table-code", table],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("table_codes")
+        .select("code")
+        .eq("table_number", table)
+        .single();
+      if (error) throw error;
+      return data.code;
+    },
+  });
+  const guestUrl = code ? `/tafel/${table}?k=${encodeURIComponent(code)}` : `/tafel/${table}`;
 
   async function rush() {
     setRunning(0);
@@ -92,7 +110,7 @@ function Demo() {
             ))}
           </select>
         </label>
-        <Button size="sm" onClick={rush} disabled={running !== null}>
+        <Button size="sm" onClick={rush} disabled={running !== null || !demoOn}>
           <Sparkles className="h-4 w-4" />{" "}
           {running !== null ? `Bestellingen komen binnen… ${running}/6` : "Drukke avond simuleren"}
         </Button>
@@ -104,17 +122,23 @@ function Demo() {
         >
           <RotateCw className="h-4 w-4" />
         </Button>
-        <Button size="sm" variant="outline" onClick={reset}>
+        <Button size="sm" variant="outline" onClick={reset} disabled={!demoOn}>
           <Eraser className="h-4 w-4" /> Opruimen
         </Button>
       </header>
+      {!demoOn && (
+        <p className="border-b bg-status-new-soft px-4 py-2 text-sm">
+          De demomodus staat uit: simuleren en opruimen zijn uitgeschakeld. Je kan hem aanzetten via
+          Beheer → Instellingen.
+        </p>
+      )}
 
       <main className="grid min-h-0 flex-1 gap-6 p-4 md:grid-cols-[minmax(260px,420px)_1fr] md:p-6">
         <section className="flex min-h-0 flex-col items-center">
           <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             Gsm van de gast · tafel {table}
             <a
-              href={`/tafel/${table}`}
+              href={guestUrl}
               target="_blank"
               rel="noreferrer"
               className="text-primary"
@@ -136,9 +160,9 @@ function Demo() {
                 }}
               >
                 <iframe
-                  key={`p-${table}-${reloadKey}`}
+                  key={`p-${table}-${reloadKey}-${code ?? ""}`}
                   title={`Gastenpagina tafel ${table}`}
-                  src={`/tafel/${table}`}
+                  src={guestUrl}
                   className="h-full w-full rounded-[2rem] bg-background"
                 />
               </div>

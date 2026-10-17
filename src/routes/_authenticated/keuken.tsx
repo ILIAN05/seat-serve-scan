@@ -29,16 +29,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNow, useSettings, useWakeLock } from "@/lib/hooks";
-import { allergenInfo,
+import {
+  allergenInfo,
   billTotal,
   duurLabel,
   euro,
+  isOpenBill,
   minutesSince,
-  readStore,
-  startOfToday,
+  ordersSince,
   STATUS_LABEL,
   tijd,
-  writeStore,
 } from "@/lib/menu";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -86,8 +86,6 @@ const badgeStyle: Record<string, string> = {
   klaar: "bg-status-done text-primary-foreground",
 };
 
-const CHECKED_KEY = "keuken-afgevinkt";
-
 function Kitchen() {
   const qc = useQueryClient();
   const now = useNow(15_000);
@@ -97,7 +95,6 @@ function Kitchen() {
   const audio = useRef<AudioContext | null>(null);
   const [sound, setSound] = useState(false);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
-  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const awake = useWakeLock(sound);
@@ -108,7 +105,7 @@ function Kitchen() {
       const { data, error } = await supabase
         .from("orders")
         .select("*, order_items(*)")
-        .gte("created_at", startOfToday().toISOString())
+        .gte("created_at", ordersSince().toISOString())
         .order("created_at");
       if (error) throw error;
       return data as Order[];
@@ -191,22 +188,18 @@ function Kitchen() {
     knownRequests.current = ids;
   }, [requests, requestsData, sound]);
 
-  // Afgevinkte gerechten bewaren op deze tablet
-  useEffect(() => {
-    setChecked(new Set(readStore<string[]>(CHECKED_KEY, [])));
-  }, []);
-  function toggleItem(id: string) {
-    setChecked((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      const todays = new Set(orders.flatMap((o) => o.order_items.map((i) => i.id)));
-      writeStore(
-        CHECKED_KEY,
-        [...n].filter((x) => todays.has(x)),
-      );
-      return n;
-    });
+  // Gerechten afvinken: bewaard op de server, zodat elke tablet in de keuken hetzelfde ziet
+  async function toggleItem(item: Tables<"order_items">) {
+    const done = !item.done;
+    qc.setQueryData<Order[]>(["kitchen-orders"], (list) =>
+      list?.map((o) => ({
+        ...o,
+        order_items: o.order_items.map((i) => (i.id === item.id ? { ...i, done } : i)),
+      })),
+    );
+    const { error } = await supabase.rpc("set_item_done", { _item: item.id, _done: done });
+    if (error) toast.error("Afvinken mislukt. Probeer opnieuw.");
+    qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
   }
 
   useEffect(() => {
@@ -242,7 +235,10 @@ function Kitchen() {
           onClick: () => {
             void supabase
               .rpc("set_order_status", { _id: o.id, _status: previous })
-              .then(() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }));
+              .then(({ error: undoError }) => {
+                if (undoError) toast.error("Ongedaan maken mislukt.");
+                qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+              });
           },
         },
         duration: 6000,
@@ -251,7 +247,8 @@ function Kitchen() {
   }
 
   async function handle(table: number) {
-    await supabase.rpc("handle_requests", { _table: table });
+    const { error } = await supabase.rpc("handle_requests", { _table: table });
+    if (error) toast.error("Afhandelen mislukt. Probeer opnieuw.");
     qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
   }
 
@@ -281,7 +278,7 @@ function Kitchen() {
   const lateCount = open.filter((o) => minutesSince(o.created_at, now) >= lateAfter).length;
   const tableTotals = useMemo(() => {
     const m = new Map<number, number>();
-    for (const o of orders.filter((x) => !x.paid_at))
+    for (const o of orders.filter((x) => isOpenBill(x)))
       m.set(o.table_number, (m.get(o.table_number) ?? 0) + billTotal([o]));
     return m;
   }, [orders]);
@@ -406,8 +403,7 @@ function Kitchen() {
           {open.map((o) => {
             const mins = minutesSince(o.created_at, now);
             const late = mins >= lateAfter;
-            const allChecked =
-              o.order_items.length > 0 && o.order_items.every((i) => checked.has(i.id));
+            const allChecked = o.order_items.length > 0 && o.order_items.every((i) => i.done);
             return (
               <article
                 key={o.id}
@@ -437,11 +433,11 @@ function Kitchen() {
                 )}
                 <ul className="my-4 flex-1 space-y-1 text-xl">
                   {o.order_items.map((it) => {
-                    const on = checked.has(it.id);
+                    const on = it.done;
                     return (
                       <li key={it.id}>
                         <button
-                          onClick={() => toggleItem(it.id)}
+                          onClick={() => toggleItem(it)}
                           className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left hover:bg-card/60"
                           aria-pressed={on}
                         >

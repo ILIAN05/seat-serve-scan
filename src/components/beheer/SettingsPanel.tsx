@@ -124,11 +124,30 @@ export function SettingsPanel({
 
       <section className="space-y-4 rounded-2xl border bg-card p-6">
         <h3 className="text-xl font-semibold">Demo</h3>
-        <p className="text-sm text-muted-foreground">
-          Handig om aan een restaurant te tonen: open het keukenscherm en laat bestellingen
-          binnenstromen.
-        </p>
-        <div className="flex flex-wrap gap-2">
+        <label className="flex items-start gap-3">
+          <Switch
+            className="mt-0.5"
+            checked={settings.demo_mode}
+            onCheckedChange={(v) =>
+              update({ demo_mode: v }, v ? "Demomodus staat aan" : "Demomodus staat uit")
+            }
+          />
+          <span>
+            <span className="font-medium">Demomodus</span>
+            <span className="block text-sm text-muted-foreground">
+              Laat bezoekers van de startpagina een demotafel openen en staat simuleren en opruimen
+              toe. Zet uit zodra het restaurant echt draait: dan kunnen bestellingen en betalingen
+              niet meer gewist worden.
+            </span>
+          </span>
+        </label>
+        {settings.demo_mode && (
+          <p className="text-sm text-muted-foreground">
+            Handig om aan een restaurant te tonen: open het keukenscherm en laat bestellingen
+            binnenstromen.
+          </p>
+        )}
+        <div className={`flex flex-wrap gap-2 ${settings.demo_mode ? "" : "hidden"}`}>
           <Button onClick={() => rush(6)} disabled={running !== null}>
             <Sparkles className="h-4 w-4" />{" "}
             {running !== null ? `Bezig… ${running}/6` : "Drukke avond simuleren"}

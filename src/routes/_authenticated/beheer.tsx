@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNow, useSettings } from "@/lib/hooks";
-import { dayStats, euro, startOfToday } from "@/lib/menu";
+import { dayStats, euro, isOpenBill, ordersSince, startOfToday } from "@/lib/menu";
 import { Zaal } from "@/components/beheer/Zaal";
 import { MenuEditor } from "@/components/beheer/MenuEditor";
 import { QrTables } from "@/components/beheer/QrTables";
@@ -37,7 +37,7 @@ function Admin() {
   const { data } = useQuery({
     queryKey: ["admin"],
     queryFn: async () => {
-      const start = startOfToday().toISOString();
+      const start = ordersSince().toISOString();
       const [c, d, o, r] = await Promise.all([
         supabase.from("categories").select("*").order("sort_order"),
         supabase.from("dishes").select("*").order("sort_order"),
@@ -48,6 +48,8 @@ function Admin() {
           .order("created_at"),
         supabase.from("table_requests").select("*").eq("handled", false).order("created_at"),
       ]);
+      const failed = [c, d, o, r].find((x) => x.error);
+      if (failed?.error) throw failed.error;
       return {
         cats: c.data ?? [],
         dishes: d.data ?? [],
@@ -87,12 +89,17 @@ function Admin() {
     navigate({ to: "/auth", search: { redirect: "/beheer" }, replace: true });
   }
 
-  const stats = useMemo(() => dayStats(data?.orders ?? []), [data?.orders]);
+  // Cijfers gaan over vandaag; de zaal toont ook tafels die over middernacht heen open staan.
+  const todaysOrders = useMemo(() => {
+    const start = startOfToday().getTime();
+    return (data?.orders ?? []).filter((o) => Date.parse(o.created_at) >= start);
+  }, [data?.orders]);
+  const stats = useMemo(() => dayStats(todaysOrders), [todaysOrders]);
   const occupied = useMemo(
     () =>
       new Set(
         (data?.orders ?? [])
-          .filter((o) => !o.paid_at && o.status !== "geannuleerd")
+          .filter((o) => isOpenBill(o) && o.status !== "geannuleerd")
           .map((o) => o.table_number),
       ).size,
     [data?.orders],
@@ -184,7 +191,7 @@ function Admin() {
             <QrTables count={settings.table_count} restaurant={restaurant} onChange={refresh} />
           )}
         </TabsContent>
-        <TabsContent value="cijfers">{data && <Stats orders={data.orders} />}</TabsContent>
+        <TabsContent value="cijfers">{data && <Stats orders={todaysOrders} />}</TabsContent>
         <TabsContent value="instellingen">
           {settings && <SettingsPanel settings={settings} onChange={refresh} />}
         </TabsContent>

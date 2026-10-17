@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ChefHat,
   MonitorPlay,
@@ -52,14 +54,29 @@ const STEPS = [
 ];
 
 function Index() {
-  const tiles = [
-    {
-      to: "/tafel/$nummer" as const,
-      params: { nummer: "7" },
-      icon: QrCode,
-      title: "Gast",
-      text: "Zo ziet een gast het menu na het scannen (tafel 7).",
+  // In demomodus geeft de server de QR-link van één demotafel vrij; anders verdwijnt die tegel.
+  const { data: demo } = useQuery({
+    queryKey: ["demo-guest-link"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("demo_guest_link");
+      if (error) return null;
+      return data as { table: number; code: string };
     },
+  });
+  const guestTile = demo
+    ? [
+        {
+          to: "/tafel/$nummer" as const,
+          params: { nummer: String(demo.table) },
+          search: { k: demo.code },
+          icon: QrCode,
+          title: "Gast",
+          text: `Zo ziet een gast het menu na het scannen (tafel ${demo.table}).`,
+        },
+      ]
+    : [];
+  const tiles = [
+    ...guestTile,
     {
       to: "/keuken" as const,
       icon: ChefHat,
@@ -110,6 +127,7 @@ function Index() {
             key={t.title}
             to={t.to}
             params={("params" in t ? t.params : {}) as never}
+            search={("search" in t ? t.search : {}) as never}
             className="group rounded-2xl border bg-card p-6 shadow-soft transition hover:-translate-y-0.5"
           >
             <div className="mb-4 inline-flex rounded-xl bg-accent p-3 text-accent-foreground">

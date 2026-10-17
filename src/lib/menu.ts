@@ -46,6 +46,32 @@ export const startOfToday = () => {
   return d;
 };
 
+/**
+ * Een tafelrekening bevat de onbetaalde bestellingen van de laatste 12 uur.
+ * Moet gelijk blijven aan het venster in de databasefuncties `table_bill` en `settle_table`.
+ */
+export const BILL_WINDOW_HOURS = 12;
+
+/** Hoort deze bestelling nog bij de openstaande rekening van haar tafel? */
+export const isOpenBill = (
+  o: { paid_at?: string | null; created_at: string },
+  now: number = Date.now(),
+) => !o.paid_at && Date.parse(o.created_at) > now - BILL_WINDOW_HOURS * 3_600_000;
+
+/**
+ * Vanaf wanneer keuken en beheer bestellingen ophalen: vanaf middernacht (voor de cijfers van
+ * vandaag), maar minstens het rekeningvenster, zodat een tafel over middernacht heen niet verdwijnt.
+ */
+export const ordersSince = (now: number = Date.now()) => {
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  return new Date(Math.min(midnight.getTime(), now - BILL_WINDOW_HOURS * 3_600_000));
+};
+
+/** Limieten die ook in de databasefunctie `place_order` gelden. */
+export const MAX_PER_LINE = 20;
+export const MAX_PER_ORDER = 60;
+
 export type CartLine = {
   dishId: string;
   name: string;
@@ -57,12 +83,14 @@ export type CartLine = {
 export const cartTotal = (lines: CartLine[]) =>
   Math.round(lines.reduce((s, l) => s + l.price * l.quantity, 0) * 100) / 100;
 
-/** Voegt een regel toe aan het mandje; zelfde gerecht met dezelfde opmerking wordt samengeteld (max 50). */
+export const cartCount = (lines: CartLine[]) => lines.reduce((s, l) => s + l.quantity, 0);
+
+/** Voegt een regel toe aan het mandje; zelfde gerecht met dezelfde opmerking wordt samengeteld (max {@link MAX_PER_LINE}). */
 export function addToCart(cart: CartLine[], line: CartLine): CartLine[] {
   const i = cart.findIndex((l) => l.dishId === line.dishId && l.note === line.note);
-  if (i < 0) return [...cart, { ...line, quantity: Math.min(50, line.quantity) }];
+  if (i < 0) return [...cart, { ...line, quantity: Math.min(MAX_PER_LINE, line.quantity) }];
   return cart.map((l, j) =>
-    j === i ? { ...l, quantity: Math.min(50, l.quantity + line.quantity) } : l,
+    j === i ? { ...l, quantity: Math.min(MAX_PER_LINE, l.quantity + line.quantity) } : l,
   );
 }
 
@@ -190,13 +218,15 @@ export function writeStore(key: string, value: unknown) {
 /** Vertaalt databasefouten naar begrijpelijke tekst voor gasten. */
 export function orderErrorMessage(message: string | undefined) {
   if (!message) return "Bestellen lukte niet. Probeer opnieuw.";
+  if (/tafelcode/i.test(message))
+    return "Deze QR-code is niet meer geldig. Scan de code op je tafel opnieuw.";
   if (/gesloten/i.test(message)) return "De keuken neemt momenteel geen bestellingen aan.";
   if (/niet beschikbaar/i.test(message))
     return "Een gerecht in je mandje is net uitverkocht. Kijk je mandje even na.";
   if (/te veel bestellingen/i.test(message))
     return "Je tafel heeft net veel bestellingen geplaatst. Wacht even of roep de ober.";
   if (/ongeldig aantal|te veel regels/i.test(message))
-    return "Je mandje is te groot. Verdeel je bestelling of vraag de ober.";
+    return `Maximaal ${MAX_PER_LINE} stuks per gerecht en ${MAX_PER_ORDER} in totaal per bestelling.`;
   if (/ongeldige tafel/i.test(message)) return "Deze tafel bestaat niet. Scan de QR-code opnieuw.";
   return "Bestellen lukte niet. Probeer opnieuw.";
 }

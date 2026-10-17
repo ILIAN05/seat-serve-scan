@@ -3,8 +3,12 @@ import {
   addToCart,
   billLines,
   billTotal,
+  cartCount,
   dayStats,
+  isOpenBill,
+  MAX_PER_LINE,
   minutesSince,
+  ordersSince,
   orderErrorMessage,
   parseBill,
   pruneCart,
@@ -22,13 +26,18 @@ const line = (over: Partial<CartLine> = {}): CartLine => ({
 });
 
 describe("mandje", () => {
-  it("telt hetzelfde gerecht met dezelfde opmerking samen, met maximum 50", () => {
+  it("telt hetzelfde gerecht met dezelfde opmerking samen, met het maximum van de server", () => {
     let cart = addToCart([], line());
     cart = addToCart(cart, line({ quantity: 2 }));
     expect(cart).toHaveLength(1);
     expect(cart[0]!.quantity).toBe(3);
     cart = addToCart(cart, line({ quantity: 60 }));
-    expect(cart[0]!.quantity).toBe(50);
+    expect(cart[0]!.quantity).toBe(MAX_PER_LINE);
+    expect(MAX_PER_LINE).toBe(20); // gelijk aan place_order in de database
+    expect(addToCart([], line({ quantity: 99 }))[0]!.quantity).toBe(20);
+  });
+  it("telt het aantal stuks in het mandje", () => {
+    expect(cartCount([line({ quantity: 3 }), line({ dishId: "b", quantity: 4 })])).toBe(7);
   });
   it("houdt een andere opmerking apart", () => {
     const cart = addToCart(addToCart([], line()), line({ note: "zonder ui" }));
@@ -138,6 +147,20 @@ describe("hulpfuncties", () => {
     expect(orderErrorMessage("Bestellen is momenteel gesloten")).toMatch(/geen bestellingen/);
     expect(orderErrorMessage("Gerecht niet beschikbaar")).toMatch(/uitverkocht/);
     expect(orderErrorMessage(undefined)).toMatch(/Probeer opnieuw/);
+    expect(orderErrorMessage("Ongeldige tafelcode")).toMatch(/QR-code/);
+    expect(orderErrorMessage("Ongeldig aantal")).toMatch(/20 stuks per gerecht/);
+  });
+  it("een tafelrekening bevat onbetaalde bestellingen van de laatste 12 uur", () => {
+    const now = Date.parse("2026-10-18T00:30:00Z");
+    expect(isOpenBill({ created_at: "2026-10-17T23:50:00Z", paid_at: null }, now)).toBe(true);
+    expect(isOpenBill({ created_at: "2026-10-17T23:50:00Z", paid_at: "x" }, now)).toBe(false);
+    expect(isOpenBill({ created_at: "2026-10-17T12:00:00Z", paid_at: null }, now)).toBe(false);
+  });
+  it("haalt bestellingen op van middernacht of 12 uur terug, wat het vroegst is", () => {
+    const morning = new Date(2026, 9, 18, 1, 0).getTime();
+    expect(ordersSince(morning).getTime()).toBe(morning - 12 * 3_600_000);
+    const evening = new Date(2026, 9, 18, 20, 0).getTime();
+    expect(ordersSince(evening).getTime()).toBe(new Date(2026, 9, 18).getTime());
   });
   it("demo-bestellingen bevatten altijd iets en geldige aantallen", () => {
     const cats = [
@@ -153,7 +176,10 @@ describe("hulpfuncties", () => {
     for (let i = 0; i < 50; i++) {
       const o = randomOrder(dishes, cats);
       expect(o.length).toBeGreaterThan(0);
-      for (const l of o) expect(l.quantity).toBeGreaterThanOrEqual(1);
+      for (const l of o) {
+        expect(l.quantity).toBeGreaterThanOrEqual(1);
+        expect(l.quantity).toBeLessThanOrEqual(MAX_PER_LINE);
+      }
     }
   });
 });
