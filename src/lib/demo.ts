@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { startOfToday } from "@/lib/menu";
 
 type DemoDish = { id: string; name: string; category_id: string };
 
@@ -73,9 +72,9 @@ export async function simulateRush({
     });
     if (error) throw new Error(error.message);
     if (Math.random() < 0.25)
-      await supabase.from("table_requests").insert({
-        table_number: 1 + Math.floor(Math.random() * settings.table_count),
-        type: Math.random() < 0.5 ? "ober" : "rekening",
+      await supabase.rpc("request_service", {
+        _table: 1 + Math.floor(Math.random() * settings.table_count),
+        _type: Math.random() < 0.5 ? "ober" : "rekening",
       });
     onProgress?.(++done);
     if (i < count - 1) await new Promise((r) => setTimeout(r, delayMs));
@@ -83,11 +82,8 @@ export async function simulateRush({
   return done;
 }
 
-/** Verwijdert alle bestellingen en tafelmeldingen van vandaag en zet bestellen weer open. */
+/** Verwijdert alle bestellingen, betalingen en tafelmeldingen van vandaag en zet bestellen weer open. */
 export async function resetDemo() {
-  const start = startOfToday().toISOString();
-  const r1 = await supabase.from("table_requests").delete().gte("created_at", start);
-  const r2 = await supabase.from("orders").delete().gte("created_at", start);
-  await supabase.from("settings").update({ ordering_open: true }).eq("id", 1);
-  if (r1.error || r2.error) throw new Error("Opruimen mislukt");
+  const { error } = await supabase.rpc("reset_demo");
+  if (error) throw new Error("Opruimen mislukt");
 }

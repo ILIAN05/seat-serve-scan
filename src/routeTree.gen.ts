@@ -16,6 +16,7 @@ import { Route as AuthenticatedBeheerRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedDemoRouteImport } from './routes/_authenticated/demo'
 import { Route as AuthenticatedKeukenRouteImport } from './routes/_authenticated/keuken'
 import { Route as TafelNummerRouteImport } from './routes/tafel.$nummer'
+import { Route as ApiPublicKassaRouteImport } from './routes/api/public/kassa'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -51,6 +52,11 @@ const TafelNummerRoute = TafelNummerRouteImport.update({
   path: '/tafel/$nummer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicKassaRoute = ApiPublicKassaRouteImport.update({
+  id: '/api/public/kassa',
+  path: '/api/public/kassa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/demo': typeof AuthenticatedDemoRoute
   '/keuken': typeof AuthenticatedKeukenRoute
   '/tafel/$nummer': typeof TafelNummerRoute
+  '/api/public/kassa': typeof ApiPublicKassaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/demo': typeof AuthenticatedDemoRoute
   '/keuken': typeof AuthenticatedKeukenRoute
   '/tafel/$nummer': typeof TafelNummerRoute
+  '/api/public/kassa': typeof ApiPublicKassaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,12 +85,27 @@ export interface FileRoutesById {
   '/_authenticated/demo': typeof AuthenticatedDemoRoute
   '/_authenticated/keuken': typeof AuthenticatedKeukenRoute
   '/tafel/$nummer': typeof TafelNummerRoute
+  '/api/public/kassa': typeof ApiPublicKassaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/beheer' | '/demo' | '/keuken' | '/tafel/$nummer'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/beheer'
+    | '/demo'
+    | '/keuken'
+    | '/tafel/$nummer'
+    | '/api/public/kassa'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/beheer' | '/demo' | '/keuken' | '/tafel/$nummer'
+  to:
+    | '/'
+    | '/auth'
+    | '/beheer'
+    | '/demo'
+    | '/keuken'
+    | '/tafel/$nummer'
+    | '/api/public/kassa'
   id:
     | '__root__'
     | '/'
@@ -92,6 +115,7 @@ export interface FileRouteTypes {
     | '/_authenticated/demo'
     | '/_authenticated/keuken'
     | '/tafel/$nummer'
+    | '/api/public/kassa'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -99,6 +123,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   TafelNummerRoute: typeof TafelNummerRoute
+  ApiPublicKassaRoute: typeof ApiPublicKassaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -152,6 +177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TafelNummerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/kassa': {
+      id: '/api/public/kassa'
+      path: '/api/public/kassa'
+      fullPath: '/api/public/kassa'
+      preLoaderRoute: typeof ApiPublicKassaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -175,6 +207,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   TafelNummerRoute: TafelNummerRoute,
+  ApiPublicKassaRoute: ApiPublicKassaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

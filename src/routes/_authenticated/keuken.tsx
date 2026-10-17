@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNow, useSettings, useWakeLock } from "@/lib/hooks";
-import {
+import { allergenInfo,
   billTotal,
   duurLabel,
   euro,
@@ -229,7 +229,7 @@ function Kitchen() {
 
   async function setStatus(o: Order, status: string, undoable = false) {
     const previous = o.status;
-    const { error } = await supabase.from("orders").update({ status }).eq("id", o.id);
+    const { error } = await supabase.rpc("set_order_status", { _id: o.id, _status: status });
     if (error) {
       toast.error("Status wijzigen mislukt. Probeer opnieuw.");
       return;
@@ -241,9 +241,7 @@ function Kitchen() {
           label: "Ongedaan maken",
           onClick: () => {
             void supabase
-              .from("orders")
-              .update({ status: previous })
-              .eq("id", o.id)
+              .rpc("set_order_status", { _id: o.id, _status: previous })
               .then(() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }));
           },
         },
@@ -252,8 +250,8 @@ function Kitchen() {
     }
   }
 
-  async function handle(id: string) {
-    await supabase.from("table_requests").update({ handled: true }).eq("id", id);
+  async function handle(table: number) {
+    await supabase.rpc("handle_requests", { _table: table });
     qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
   }
 
@@ -387,7 +385,7 @@ function Kitchen() {
                   · {duurLabel(minutesSince(r.created_at, now))}
                 </p>
               </div>
-              <Button size="lg" onClick={() => handle(r.id)}>
+              <Button size="lg" onClick={() => handle(r.table_number)}>
                 <Check className="h-5 w-5" /> Afgehandeld
               </Button>
             </div>
@@ -432,6 +430,11 @@ function Kitchen() {
                     {fresh.has(o.id) ? "NIEUW" : STATUS_LABEL[o.status]}
                   </span>
                 </div>
+                {o.allergies.length > 0 && (
+                  <p className="mt-3 rounded-lg bg-destructive px-3 py-2 text-base font-bold text-destructive-foreground">
+                    ⚠ Allergie: {o.allergies.map((a) => allergenInfo(a)?.label ?? a).join(", ")}
+                  </p>
+                )}
                 <ul className="my-4 flex-1 space-y-1 text-xl">
                   {o.order_items.map((it) => {
                     const on = checked.has(it.id);
