@@ -13,11 +13,23 @@ import {
   Receipt,
   ShieldAlert,
   ShoppingBag,
+  Trash2,
   Utensils,
+  X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Sheet,
   SheetContent,
@@ -80,6 +92,12 @@ type Dish = {
 type RequestType = "ober" | "rekening";
 const REQUEST_COOLDOWN_MS = 60_000;
 
+const INTRO_STEPS = [
+  "Tik op een gerecht, kies het aantal en voeg eventueel een opmerking toe.",
+  "Open je mandje onderaan en tik op “Bestelling plaatsen”.",
+  "Volg hier live hoe ver je bestelling staat. Je betaalt pas na de maaltijd.",
+];
+
 function TablePage() {
   const { nummer } = Route.useParams();
   const { k: code } = Route.useSearch();
@@ -88,7 +106,11 @@ function TablePage() {
   const qc = useQueryClient();
   const { data: settings } = useSettings();
 
-  const { data: menu } = useQuery({
+  const {
+    data: menu,
+    error: menuError,
+    refetch: refetchMenu,
+  } = useQuery({
     queryKey: ["menu"],
     queryFn: async () => {
       const [c, d] = await Promise.all([
@@ -148,16 +170,22 @@ function TablePage() {
     };
   }, [qc, table]);
 
-  // Mandje en allergiefilter bewaren op dit toestel (overleeft herladen)
+  // Mandje, allergiefilter en "uitleg gezien" bewaren op dit toestel (overleeft herladen)
   const cartKey = `mandje-tafel-${table}`;
   const [cart, setCart] = useState<CartLine[]>([]);
   const [avoid, setAvoid] = useState<string[]>([]);
+  const [introSeen, setIntroSeen] = useState(true);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     setCart(readStore<CartLine[]>(cartKey, []));
     setAvoid(readStore<string[]>("allergiefilter", []));
+    setIntroSeen(readStore<boolean>("uitleg-gezien", false));
     setLoaded(true);
   }, [cartKey]);
+  function hideIntro() {
+    setIntroSeen(true);
+    writeStore("uitleg-gezien", true);
+  }
   useEffect(() => {
     if (loaded) writeStore(cartKey, cart.length ? cart : null);
   }, [cart, cartKey, loaded]);
@@ -208,6 +236,9 @@ function TablePage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [picked, setPicked] = useState<Dish | null>(null);
   const [busy, setBusy] = useState(false);
+  const [justOrdered, setJustOrdered] = useState(false);
+  // Ober roepen / rekening vragen eerst laten bevestigen: een verkeerde tik stuurt anders meteen iemand
+  const [confirmRequest, setConfirmRequest] = useState<RequestType | null>(null);
   const [cooldown, setCooldown] = useState<Partial<Record<RequestType, number | undefined>>>({});
 
   // Actieve categorie volgen tijdens het scrollen
@@ -287,6 +318,7 @@ function TablePage() {
     }
     setCart([]);
     setCartOpen(false);
+    setJustOrdered(true);
     setTableOpen(true);
     toast.success("Je bestelling is doorgestuurd naar de keuken!");
     qc.invalidateQueries({ queryKey: ["bill", table, code] });
@@ -338,12 +370,45 @@ function TablePage() {
         </div>
       )}
 
+      {loaded && !introSeen && (
+        <section
+          aria-label="Zo werkt bestellen"
+          className="relative mx-5 mt-4 rounded-2xl border bg-card p-4 shadow-soft"
+        >
+          <button
+            onClick={hideIntro}
+            aria-label="Uitleg sluiten"
+            className="absolute right-2 top-2 rounded-full p-2 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <h2 className="font-sans text-base font-semibold">Zo bestel je</h2>
+          <ol className="mt-2 space-y-2 text-sm">
+            {INTRO_STEPS.map((step, i) => (
+              <li key={step} className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
+                  {i + 1}
+                </span>
+                <span className="pt-0.5">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <Button className="mt-3 w-full rounded-full" onClick={hideIntro}>
+            Begrepen, naar het menu
+          </Button>
+        </section>
+      )}
+
       <div className="grid grid-cols-2 gap-2 px-5 pt-4">
-        <RequestButton type="ober" cooldown={cooldown.ober} onClick={() => sendRequest("ober")} />
+        <RequestButton
+          type="ober"
+          cooldown={cooldown.ober}
+          onClick={() => setConfirmRequest("ober")}
+        />
         <RequestButton
           type="rekening"
           cooldown={cooldown.rekening}
-          onClick={() => sendRequest("rekening")}
+          onClick={() => setConfirmRequest("rekening")}
         />
       </div>
 
@@ -385,7 +450,18 @@ function TablePage() {
         ))}
       </nav>
 
-      {!menu && <p className="p-8 text-center text-muted-foreground">Menu laden…</p>}
+      {!menu && !menuError && <p className="p-8 text-center text-muted-foreground">Menu laden…</p>}
+      {!menu && menuError && (
+        <div className="p-8 text-center">
+          <p className="font-semibold">Het menu kon niet geladen worden.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Controleer je internetverbinding of roep de ober.
+          </p>
+          <Button variant="outline" className="mt-4 rounded-full" onClick={() => refetchMenu()}>
+            Opnieuw proberen
+          </Button>
+        </div>
+      )}
 
       {menu?.categories.map((c) => {
         const dishes = menu.dishes.filter((d) => d.category_id === c.id);
@@ -437,13 +513,21 @@ function TablePage() {
                             </span>
                           );
                         })}
-                        {inCart > 0 && (
-                          <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">
-                            {inCart} in mandje
-                          </span>
-                        )}
                       </div>
                     </div>
+                    <span className="flex shrink-0 flex-col items-center justify-end gap-1 self-end">
+                      {inCart > 0 && (
+                        <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">
+                          {inCart}× in mandje
+                        </span>
+                      )}
+                      <span
+                        aria-hidden
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </span>
+                    </span>
                   </button>
                 );
               })}
@@ -487,15 +571,16 @@ function TablePage() {
               variant={count > 0 ? "secondary" : "default"}
               className={`h-14 rounded-2xl text-base shadow-soft ${count > 0 ? "px-4" : "w-full justify-between"}`}
               onClick={() => setTableOpen(true)}
-              aria-label="Jouw tafel"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <Utensils className="h-5 w-5" />
-                {count === 0 && (
-                  <span>
-                    Jouw tafel ·{" "}
-                    {openOrders.length ? `${openOrders.length} in bereiding` : "alles klaar"}
+                {count === 0 ? (
+                  <span className="truncate">
+                    Mijn bestellingen ·{" "}
+                    {openOrders.length ? `${openOrders.length} bezig` : "alles klaar"}
                   </span>
+                ) : (
+                  <span>Status</span>
                 )}
               </span>
               {count === 0 && <span>{euro(tableTotal)}</span>}
@@ -543,7 +628,7 @@ function TablePage() {
                     size="icon"
                     variant="outline"
                     className="rounded-full"
-                    aria-label={`Eén ${l.name} minder`}
+                    aria-label={l.quantity > 1 ? `Eén ${l.name} minder` : `${l.name} verwijderen`}
                     onClick={() =>
                       setCart((c) =>
                         c.flatMap((x, j) =>
@@ -556,7 +641,11 @@ function TablePage() {
                       )
                     }
                   >
-                    <Minus className="h-4 w-4" />
+                    {l.quantity > 1 ? (
+                      <Minus className="h-4 w-4" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
                   </Button>
                   <span className="w-6 text-center font-semibold">{l.quantity}</span>
                   <Button
@@ -579,7 +668,9 @@ function TablePage() {
               </div>
             ))}
             {!cart.length && (
-              <p className="py-6 text-center text-muted-foreground">Je mandje is leeg.</p>
+              <p className="py-6 text-center text-muted-foreground">
+                Je mandje is leeg. Tik op een gerecht in het menu om het toe te voegen.
+              </p>
             )}
           </div>
           <div className="space-y-3 p-4">
@@ -603,22 +694,64 @@ function TablePage() {
               disabled={!count || busy || !orderingOpen || tooMany}
               onClick={placeOrder}
             >
-              {busy ? "Bezig met versturen…" : "Bestelling plaatsen"}
+              {busy ? "Bezig met versturen…" : `Bestelling plaatsen · ${euro(total)}`}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">Je betaalt na de maaltijd.</p>
+            <Button
+              variant="ghost"
+              className="h-11 w-full rounded-2xl"
+              onClick={() => setCartOpen(false)}
+            >
+              Nog iets toevoegen
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              Je bestelling gaat meteen naar de keuken. Bijbestellen kan altijd, en je betaalt pas
+              na de maaltijd.
+            </p>
           </div>
         </SheetContent>
       </Sheet>
 
       <TableSheet
         open={tableOpen}
-        onOpenChange={setTableOpen}
+        onOpenChange={(o) => {
+          setTableOpen(o);
+          if (!o) setJustOrdered(false);
+        }}
         table={table}
         orders={bill}
         total={tableTotal}
+        justOrdered={justOrdered}
         cooldown={cooldown}
-        onRequest={sendRequest}
+        onRequest={setConfirmRequest}
       />
+      <AlertDialog open={!!confirmRequest} onOpenChange={(o) => !o && setConfirmRequest(null)}>
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmRequest === "rekening" ? "Rekening vragen?" : "Ober roepen?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmRequest === "rekening"
+                ? tableTotal > 0
+                  ? `Een medewerker brengt de rekening naar tafel ${table}. Het totaal staat nu op ${euro(tableTotal)}.`
+                  : "Er staat nog niets op de rekening van deze tafel. Wil je toch een medewerker roepen?"
+                : `Een medewerker komt naar tafel ${table}. Handig voor vragen, extra bestek of hulp bij het bestellen.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">Toch niet</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-full"
+              onClick={() => {
+                if (confirmRequest) void sendRequest(confirmRequest);
+                setConfirmRequest(null);
+              }}
+            >
+              {confirmRequest === "rekening" ? "Ja, rekening vragen" : "Ja, ober roepen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AllergenSheet
         open={filterOpen}
         onOpenChange={setFilterOpen}
@@ -714,12 +847,18 @@ function AddDialog({
                 );
               })}
             </div>
-            <Textarea
-              placeholder="Opmerking voor de keuken (bv. zonder ui, saus apart)"
-              maxLength={200}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
+            <div className="space-y-1.5">
+              <label htmlFor="opmerking" className="block text-sm font-medium">
+                Opmerking voor de keuken <span className="text-muted-foreground">(optioneel)</span>
+              </label>
+              <Textarea
+                id="opmerking"
+                placeholder="bv. zonder ui, saus apart"
+                maxLength={200}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 rounded-full border p-1">
                 <Button
@@ -760,6 +899,12 @@ function AddDialog({
 
 const STEPS = ["ontvangen", "in_bereiding", "klaar"] as const;
 const STEP_ICONS = [Check, ChefHat, Bell];
+const STATUS_HINT: Record<string, string> = {
+  ontvangen: "De keuken heeft je bestelling ontvangen.",
+  in_bereiding: "Je bestelling wordt nu bereid.",
+  klaar: "Klaar! Je bestelling wordt zo naar je tafel gebracht.",
+  geannuleerd: "Deze bestelling werd geannuleerd. Vraag de ober om meer uitleg.",
+};
 
 function TableSheet({
   open,
@@ -767,6 +912,7 @@ function TableSheet({
   table,
   orders,
   total,
+  justOrdered,
   cooldown,
   onRequest,
 }: {
@@ -775,11 +921,15 @@ function TableSheet({
   table: number;
   orders: BillOrder[];
   total: number;
+  justOrdered: boolean;
   cooldown: Partial<Record<RequestType, number | undefined>>;
   onRequest: (t: RequestType) => void;
 }) {
   const lines = useMemo(() => billLines(orders), [orders]);
   const [view, setView] = useState<"status" | "rekening">("status");
+  useEffect(() => {
+    if (justOrdered) setView("status");
+  }, [justOrdered]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -788,8 +938,24 @@ function TableSheet({
       >
         <SheetHeader>
           <SheetTitle className="font-display text-2xl">Tafel {table}</SheetTitle>
-          <SheetDescription>Alle bestellingen van deze tafel, live bijgewerkt.</SheetDescription>
+          <SheetDescription>
+            Alle bestellingen van deze tafel, ook die van je tafelgenoten. Wordt vanzelf bijgewerkt.
+          </SheetDescription>
         </SheetHeader>
+        {justOrdered && (
+          <div
+            role="status"
+            className="mx-4 flex items-start gap-3 rounded-2xl border border-status-done bg-status-done-soft p-4"
+          >
+            <Check className="mt-0.5 h-5 w-5 shrink-0 text-status-done" />
+            <div>
+              <p className="font-semibold">Bedankt, je bestelling is verstuurd!</p>
+              <p className="text-sm text-muted-foreground">
+                De keuken is ermee bezig. Hieronder zie je live hoe ver ze staat.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="mx-4 grid grid-cols-2 rounded-full bg-muted p-1 text-sm font-semibold">
           {(["status", "rekening"] as const).map((v) => (
             <button
@@ -825,24 +991,35 @@ function TableSheet({
                       {STATUS_LABEL[o.status]}
                     </span>
                   </div>
+                  <p className="mb-3 text-sm font-medium">{STATUS_HINT[o.status]}</p>
                   {!cancelled && (
                     <div
-                      className="mb-3 flex items-center gap-1"
+                      className="mb-3 flex items-start gap-1"
                       aria-label={`Status: ${STATUS_LABEL[o.status]}`}
                     >
                       {STEPS.map((s, i) => {
                         const Icon = STEP_ICONS[i]!;
                         const done = i <= idx;
                         return (
-                          <div key={s} className="flex flex-1 items-center gap-1">
-                            <div
-                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"} ${i === idx && s !== "klaar" ? "animate-pulse" : ""}`}
-                            >
-                              <Icon className="h-4 w-4" />
+                          <div
+                            key={s}
+                            className={`flex items-start gap-1 ${i < STEPS.length - 1 ? "flex-1" : ""}`}
+                          >
+                            <div className="flex w-16 shrink-0 flex-col items-center gap-1">
+                              <div
+                                className={`flex h-8 w-8 items-center justify-center rounded-full ${done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"} ${i === idx && s !== "klaar" ? "animate-pulse" : ""}`}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <span
+                                className={`text-center text-[11px] leading-tight ${i === idx ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                              >
+                                {STATUS_LABEL[s]}
+                              </span>
                             </div>
                             {i < STEPS.length - 1 && (
                               <div
-                                className={`h-1 flex-1 rounded-full ${i < idx ? "bg-primary" : "bg-muted"}`}
+                                className={`mt-3.5 h-1 flex-1 rounded-full ${i < idx ? "bg-primary" : "bg-muted"}`}
                               />
                             )}
                           </div>
@@ -884,7 +1061,7 @@ function TableSheet({
               </div>
             </div>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Je betaalt aan tafel of aan de toog.
+              Klaar met eten? Tik op “Rekening vragen”. Je betaalt aan tafel of aan de toog.
             </p>
           </div>
         )}

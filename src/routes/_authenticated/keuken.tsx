@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Bell,
   Check,
+  ChefHat,
   Maximize,
   Minimize,
   PauseCircle,
@@ -390,6 +391,27 @@ function Kitchen() {
         </section>
       )}
 
+      <div
+        className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-base text-muted-foreground"
+        aria-label="Legende"
+      >
+        <span className="flex items-center gap-2">
+          <span className="h-4 w-4 rounded border-2 border-status-new bg-status-new-soft" /> Nieuw
+          binnen
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-4 w-4 rounded border-2 border-status-busy bg-status-busy-soft" /> In
+          bereiding
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-4 w-4 rounded ring-4 ring-destructive/60" /> Wacht langer dan{" "}
+          {lateAfter} min
+        </span>
+        <span className="flex items-center gap-2">
+          <Check className="h-4 w-4" /> Tik op een gerecht om het af te vinken
+        </span>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section
           className="grid content-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]"
@@ -397,7 +419,8 @@ function Kitchen() {
         >
           {open.length === 0 && (
             <p className="col-span-full rounded-2xl border border-dashed p-12 text-center text-xl text-muted-foreground">
-              Geen openstaande bestellingen
+              Geen openstaande bestellingen. Nieuwe bestellingen verschijnen hier vanzelf
+              {sound ? ", met een geluidssignaal." : "."}
             </p>
           )}
           {open.map((o) => {
@@ -459,42 +482,40 @@ function Kitchen() {
                     );
                   })}
                 </ul>
-                <div className="grid grid-cols-2 gap-2">
-                  {o.status === "ontvangen" ? (
+                {/* Eén grote knop voor de volgende stap; "meteen klaar" (bv. drankjes) als tweede keuze */}
+                {o.status === "ontvangen" ? (
+                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-2">
                     <Button
                       size="lg"
-                      variant="outline"
-                      className="h-14 bg-card text-base"
+                      className="h-14 text-base"
                       onClick={() => setStatus(o, "in_bereiding")}
                     >
-                      Start bereiding
+                      <ChefHat className="h-5 w-5" /> Start bereiding
                     </Button>
-                  ) : (
                     <Button
                       size="lg"
                       variant="outline"
                       className="h-14 bg-card text-base"
-                      onClick={() => setCancelId(o.id)}
+                      onClick={() => setStatus(o, "klaar", true)}
                     >
-                      <X className="h-4 w-4" /> Annuleren
+                      <Check className="h-5 w-5" /> Klaar
                     </Button>
-                  )}
+                  </div>
+                ) : (
                   <Button
                     size="lg"
-                    className={`h-14 text-base ${allChecked ? "animate-pulse" : ""}`}
+                    className={`h-14 w-full text-base ${allChecked ? "animate-pulse" : ""}`}
                     onClick={() => setStatus(o, "klaar", true)}
                   >
-                    <Check className="h-5 w-5" /> Klaar
+                    <Check className="h-5 w-5" /> Klaar om op te dienen
                   </Button>
-                </div>
-                {o.status === "ontvangen" && (
-                  <button
-                    className="mt-2 text-sm text-muted-foreground underline-offset-4 hover:underline"
-                    onClick={() => setCancelId(o.id)}
-                  >
-                    Bestelling annuleren
-                  </button>
                 )}
+                <button
+                  className="mt-2 inline-flex items-center justify-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:underline"
+                  onClick={() => setCancelId(o.id)}
+                >
+                  <X className="h-3.5 w-3.5" /> Bestelling annuleren
+                </button>
               </article>
             );
           })}

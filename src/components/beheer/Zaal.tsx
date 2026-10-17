@@ -69,10 +69,26 @@ export function Zaal({
 
   return (
     <div className="space-y-4 pt-4">
-      <p className="text-muted-foreground">
-        {busy.length} van {tableCount} tafels bezet · openstaand{" "}
-        {euro(busy.reduce((s, t) => s + t.total, 0))}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="font-medium">
+          {busy.length} van {tableCount} tafels bezet · openstaand{" "}
+          {euro(busy.reduce((s, t) => s + t.total, 0))}
+        </p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5 rounded border-2 border-dashed" /> Vrij
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5 rounded border-2 border-primary/40 bg-card" /> Bezet
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Bell className="h-4 w-4 text-oak" /> Ober geroepen
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Receipt className="h-4 w-4 text-oak" /> Vraagt de rekening
+          </span>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         {tables.map((t) => {
           const occupied = t.orders.length > 0;
@@ -85,7 +101,7 @@ export function Zaal({
             <button
               key={t.table}
               onClick={() => setSelected(t.table)}
-              className={`relative flex min-h-32 flex-col rounded-2xl border-2 p-4 text-left transition hover:-translate-y-0.5 ${wantsBill ? "border-oak bg-card shadow-soft" : occupied ? "border-primary/40 bg-card shadow-soft" : "border-dashed bg-transparent"}`}
+              className={`relative flex min-h-32 flex-col rounded-2xl border-2 p-4 text-left transition hover:-translate-y-0.5 ${wantsBill || wantsWaiter ? "border-oak bg-card shadow-soft" : occupied ? "border-primary/40 bg-card shadow-soft" : "border-dashed bg-transparent"}`}
             >
               <div className="flex items-start justify-between">
                 <span className="font-display text-2xl font-semibold">Tafel {t.table}</span>

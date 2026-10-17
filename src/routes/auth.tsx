@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,7 +55,13 @@ function AuthPage() {
           <div className="mb-3 h-1.5 w-12 rounded-full bg-oak-gradient" />
           <h1 className="text-3xl font-semibold">Inloggen</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Alleen voor personeel van Bistro De Houder
+            Alleen voor personeel van Bistro De Houder. Daarna ga je naar{" "}
+            {redirect.startsWith("/beheer")
+              ? "het beheer"
+              : redirect.startsWith("/demo")
+                ? "de demo"
+                : "het keukenscherm"}
+            .
           </p>
         </div>
         <div className="space-y-2">
@@ -80,8 +86,19 @@ function AuthPage() {
           />
         </div>
         <Button type="submit" className="w-full" size="lg" disabled={busy}>
-          Inloggen
+          {busy ? "Bezig met inloggen…" : "Inloggen"}
         </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          Geen account of wachtwoord vergeten? Vraag het aan de eigenaar van het restaurant.
+        </p>
+        <p className="text-center text-sm">
+          <Link to="/" className="text-primary underline-offset-4 hover:underline">
+            Terug naar de startpagina
+          </Link>
+        </p>
+        <p className="text-center text-xs text-muted-foreground">
+          Ben je gast? Dan heb je geen login nodig: scan de QR-code op je tafel.
+        </p>
       </form>
     </main>
   );

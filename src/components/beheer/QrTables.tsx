@@ -119,7 +119,7 @@ export function QrTables({
           Opslaan
         </Button>
         <Button variant="outline" onClick={() => window.print()} disabled={!codes}>
-          <Printer className="h-4 w-4" /> Alles printen
+          <Printer className="h-4 w-4" /> Alle QR-codes printen
         </Button>
       </div>
       <div className="space-y-1 text-sm text-muted-foreground no-print">
@@ -147,7 +147,9 @@ export function QrTables({
                 <div className="my-2 aspect-square w-full max-w-48 animate-pulse rounded-lg bg-muted" />
               )}
               <p className="font-display text-2xl font-semibold">Tafel {t}</p>
-              <p className="text-xs text-muted-foreground">Scan & bestel</p>
+              <p className="text-xs text-muted-foreground">
+                Scan met de camera van je gsm en bestel
+              </p>
               <div className="mt-3 flex flex-wrap justify-center gap-1 no-print">
                 <Button size="sm" variant="outline" asChild disabled={!src}>
                   <a href={src} download={`tafel-${t}.png`}>
@@ -161,17 +163,17 @@ export function QrTables({
                     search={{ k: codes!.find((c) => c.table_number === t)!.code }}
                     target="_blank"
                   >
-                    Open
+                    Bekijk als gast
                   </Link>
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   aria-label={`Nieuwe QR-code voor tafel ${t}`}
-                  title="Nieuwe code"
+                  title="Maak een nieuwe code als de oude ergens rondslingert"
                   onClick={() => regenerate(t)}
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="h-4 w-4" /> Nieuwe code
                 </Button>
               </div>
             </div>

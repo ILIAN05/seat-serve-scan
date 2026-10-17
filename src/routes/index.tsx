@@ -54,7 +54,7 @@ const STEPS = [
 ];
 
 function Index() {
-  // In demomodus geeft de server de QR-link van één demotafel vrij; anders verdwijnt die tegel.
+  // In demomodus geeft de server de QR-link van één demotafel vrij; anders verdwijnt die knop.
   const { data: demo } = useQuery({
     queryKey: ["demo-guest-link"],
     queryFn: async () => {
@@ -63,31 +63,18 @@ function Index() {
       return data as { table: number; code: string };
     },
   });
-  const guestTile = demo
-    ? [
-        {
-          to: "/tafel/$nummer" as const,
-          params: { nummer: String(demo.table) },
-          search: { k: demo.code },
-          icon: QrCode,
-          title: "Gast",
-          text: `Zo ziet een gast het menu na het scannen (tafel ${demo.table}).`,
-        },
-      ]
-    : [];
-  const tiles = [
-    ...guestTile,
+  const staffTiles = [
     {
       to: "/keuken" as const,
       icon: ChefHat,
       title: "Keuken",
-      text: "Live binnenkomende bestellingen, timers en meldingen.",
+      text: "Voor de tablet in de keuken: binnenkomende bestellingen, timers en meldingen.",
     },
     {
       to: "/beheer" as const,
       icon: Settings,
       title: "Beheer",
-      text: "Zaaloverzicht, afrekenen, menu, QR-codes en cijfers.",
+      text: "Voor de zaal en de eigenaar: tafels afrekenen, menu, QR-codes en cijfers.",
     },
     {
       to: "/demo" as const,
@@ -101,11 +88,63 @@ function Index() {
       <div className="mb-3 h-2 w-16 rounded-full bg-oak-gradient" />
       <h1 className="text-5xl font-semibold tracking-tight md:text-6xl">Bistro De Houder</h1>
       <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-        Scan de QR-code op je tafel, kies rustig uit het menu en bestel meteen vanaf je gsm. De
-        keuken krijgt je bestelling live binnen.
+        Bestellen aan tafel met je gsm: geen app, geen wachten op de ober.
       </p>
 
-      <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-10 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+        <section
+          aria-labelledby="gast"
+          className="flex flex-col rounded-3xl bg-oak-gradient p-6 text-oak-foreground shadow-soft"
+        >
+          <div className="mb-4 inline-flex w-fit rounded-xl bg-card/20 p-3">
+            <ScanLine className="h-6 w-6" />
+          </div>
+          <h2 id="gast" className="text-2xl font-semibold">
+            Ik zit aan tafel
+          </h2>
+          <p className="mt-2 flex-1 opacity-90">
+            Richt de camera van je gsm op de QR-code in de houder op je tafel en tik op de link die
+            verschijnt. Het menu opent meteen.
+          </p>
+          {demo && (
+            <Link
+              to="/tafel/$nummer"
+              params={{ nummer: String(demo.table) }}
+              search={{ k: demo.code }}
+              className="mt-5 inline-flex w-fit items-center gap-2 rounded-full bg-card px-5 py-3 font-semibold text-foreground transition hover:-translate-y-0.5"
+            >
+              <QrCode className="h-5 w-5" /> Probeer als gast (tafel {demo.table})
+            </Link>
+          )}
+        </section>
+
+        <section aria-labelledby="personeel" className="rounded-3xl border bg-card p-6 shadow-soft">
+          <h2 id="personeel" className="text-2xl font-semibold">
+            Ik werk hier
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Je logt in met je personeelsaccount. Nog geen account? Vraag het aan de eigenaar.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {staffTiles.map((t) => (
+              <Link
+                key={t.title}
+                to={t.to}
+                className="group rounded-2xl border bg-background p-4 transition hover:-translate-y-0.5 hover:shadow-soft"
+              >
+                <div className="mb-3 inline-flex rounded-xl bg-accent p-2.5 text-accent-foreground">
+                  <t.icon className="h-5 w-5" />
+                </div>
+                <h3 className="font-sans text-lg font-semibold">{t.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{t.text}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <h2 className="mt-14 text-2xl font-semibold">Zo werkt het</h2>
+      <ol className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {STEPS.map((s, i) => (
           <li key={s.title} className="rounded-2xl bg-secondary/60 p-5">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
@@ -114,33 +153,11 @@ function Index() {
               </span>
               <s.icon className="h-4 w-4" />
             </div>
-            <h2 className="text-lg font-semibold">{s.title}</h2>
+            <h3 className="font-sans text-lg font-semibold">{s.title}</h3>
             <p className="mt-1 text-sm text-muted-foreground">{s.text}</p>
           </li>
         ))}
       </ol>
-
-      <h2 className="mt-14 text-2xl font-semibold">Probeer het zelf</h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {tiles.map((t) => (
-          <Link
-            key={t.title}
-            to={t.to}
-            params={("params" in t ? t.params : {}) as never}
-            search={("search" in t ? t.search : {}) as never}
-            className="group rounded-2xl border bg-card p-6 shadow-soft transition hover:-translate-y-0.5"
-          >
-            <div className="mb-4 inline-flex rounded-xl bg-accent p-3 text-accent-foreground">
-              <t.icon className="h-6 w-6" />
-            </div>
-            <h3 className="font-sans text-xl font-semibold">{t.title}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t.text}</p>
-          </Link>
-        ))}
-      </div>
-      <p className="mt-6 text-sm text-muted-foreground">
-        Keuken, beheer en demo vragen een personeelslogin.
-      </p>
     </main>
   );
 }

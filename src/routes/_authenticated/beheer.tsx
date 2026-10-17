@@ -1,12 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
-import { ChefHat, LogOut, MonitorPlay } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChefHat, LogOut, MonitorPlay, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNow, useSettings } from "@/lib/hooks";
-import { dayStats, euro, isOpenBill, ordersSince, startOfToday } from "@/lib/menu";
+import {
+  dayStats,
+  euro,
+  isOpenBill,
+  ordersSince,
+  readStore,
+  startOfToday,
+  writeStore,
+} from "@/lib/menu";
 import { Zaal } from "@/components/beheer/Zaal";
 import { MenuEditor } from "@/components/beheer/MenuEditor";
 import { QrTables } from "@/components/beheer/QrTables";
@@ -28,6 +36,18 @@ export const Route = createFileRoute("/_authenticated/beheer")({
   }),
   component: Admin,
 });
+
+type Tab = "zaal" | "menu" | "tafels" | "cijfers" | "instellingen";
+
+/** Korte uitleg bovenaan elk tabblad, zodat je zonder handleiding weet wat je er kan doen. */
+const TAB_HINT: Record<Tab, string> = {
+  zaal: "Alle tafels in één oogopslag. Tik op een tafel om haar bestellingen te zien, de rekening af te drukken of af te rekenen.",
+  menu: "Pas gerechten en categorieën aan. Zet een gerecht op uitverkocht en het verdwijnt meteen van de gsm van je gasten.",
+  tafels:
+    "Stel het aantal tafels in en print per tafel een QR-code voor de tafelhouder. Met “Bekijk als gast” zie je wat je gasten zien.",
+  cijfers: "Omzet, drukte per uur en populairste gerechten van vandaag.",
+  instellingen: "Naam van je restaurant, bestellen pauzeren en de demomodus.",
+};
 
 function Admin() {
   const qc = useQueryClient();
@@ -106,6 +126,13 @@ function Admin() {
   );
   const restaurant = settings?.restaurant_name ?? "Bistro De Houder";
   const openRequests = data?.requests.length ?? 0;
+  const [tab, setTab] = useState<Tab>("zaal");
+  const [guideHidden, setGuideHidden] = useState(true);
+  useEffect(() => setGuideHidden(readStore<boolean>("startgids-verborgen", false)), []);
+  function hideGuide() {
+    setGuideHidden(true);
+    writeStore("startgids-verborgen", true);
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
@@ -157,7 +184,11 @@ function Admin() {
         />
       </div>
 
-      <Tabs defaultValue="zaal">
+      {!guideHidden && settings && (
+        <StartGuide demoMode={settings.demo_mode} onTab={setTab} onHide={hideGuide} />
+      )}
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
         <TabsList className="no-print flex h-auto flex-wrap justify-start">
           <TabsTrigger value="zaal">
             Zaal
@@ -172,6 +203,7 @@ function Admin() {
           <TabsTrigger value="cijfers">Cijfers</TabsTrigger>
           <TabsTrigger value="instellingen">Instellingen</TabsTrigger>
         </TabsList>
+        <p className="mt-3 text-sm text-muted-foreground no-print">{TAB_HINT[tab]}</p>
         <TabsContent value="zaal">
           {data && settings && (
             <Zaal
@@ -197,6 +229,88 @@ function Admin() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function StartGuide({
+  demoMode,
+  onTab,
+  onHide,
+}: {
+  demoMode: boolean;
+  onTab: (t: Tab) => void;
+  onHide: () => void;
+}) {
+  const steps: { title: string; text: string; action: React.ReactNode; done?: boolean }[] = [
+    {
+      title: "Kijk je menu na",
+      text: "Gerechten, prijzen en allergenen. Uitverkocht? Eén tik en gasten zien het niet meer.",
+      action: (
+        <Button size="sm" variant="outline" onClick={() => onTab("menu")}>
+          Naar menu
+        </Button>
+      ),
+    },
+    {
+      title: "Print de QR-codes",
+      text: "Stel het aantal tafels in en steek elke code in de tafelhouder.",
+      action: (
+        <Button size="sm" variant="outline" onClick={() => onTab("tafels")}>
+          Naar QR-codes
+        </Button>
+      ),
+    },
+    {
+      title: "Open het keukenscherm op de tablet",
+      text: "Zet het geluid aan: nieuwe bestellingen en meldingen komen daar binnen.",
+      action: (
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/keuken">Keukenscherm</Link>
+        </Button>
+      ),
+    },
+    {
+      title: "Zet de demomodus uit als je live gaat",
+      text: "Dan kunnen bestellingen en betalingen niet meer gewist worden.",
+      done: !demoMode,
+      action: (
+        <Button size="sm" variant="outline" onClick={() => onTab("instellingen")}>
+          Naar instellingen
+        </Button>
+      ),
+    },
+  ];
+  return (
+    <section
+      aria-label="Aan de slag"
+      className="relative mb-8 rounded-2xl border bg-secondary/60 p-5 no-print"
+    >
+      <button
+        onClick={onHide}
+        aria-label="Startgids verbergen"
+        className="absolute right-3 top-3 rounded-full p-2 text-muted-foreground hover:bg-card"
+      >
+        <X className="h-4 w-4" />
+      </button>
+      <h2 className="text-xl font-semibold">Aan de slag in 4 stappen</h2>
+      <ol className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {steps.map((s, i) => (
+          <li key={s.title} className="flex flex-col gap-2 rounded-xl bg-card p-4">
+            <span
+              className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${s.done ? "bg-status-done text-primary-foreground" : "bg-accent text-accent-foreground"}`}
+            >
+              {s.done ? "✓" : i + 1}
+            </span>
+            <p className="font-semibold">{s.title}</p>
+            <p className="flex-1 text-sm text-muted-foreground">{s.text}</p>
+            <div>{s.action}</div>
+          </li>
+        ))}
+      </ol>
+      <Button variant="ghost" size="sm" className="mt-3" onClick={onHide}>
+        Ik ken de weg, verberg deze gids
+      </Button>
+    </section>
   );
 }
 
