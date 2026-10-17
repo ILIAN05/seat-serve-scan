@@ -129,6 +129,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          allergies: string[]
           created_at: string
           id: string
           paid_at: string | null
@@ -139,6 +140,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allergies?: string[]
           created_at?: string
           id?: string
           paid_at?: string | null
@@ -149,6 +151,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allergies?: string[]
           created_at?: string
           id?: string
           paid_at?: string | null
@@ -157,6 +160,36 @@ export type Database = {
           table_number?: number
           total?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          order_ids: string[]
+          table_number: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method: string
+          order_ids?: string[]
+          table_number: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          order_ids?: string[]
+          table_number?: number
         }
         Relationships: []
       }
@@ -231,6 +264,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      handle_requests: { Args: { _table: number }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -238,7 +272,20 @@ export type Database = {
         }
         Returns: boolean
       }
-      place_order: { Args: { _items: Json; _table: number }; Returns: string }
+      place_order: {
+        Args: { _allergies?: string[]; _items: Json; _table: number }
+        Returns: string
+      }
+      request_service: {
+        Args: { _table: number; _type: string }
+        Returns: string
+      }
+      reset_demo: { Args: never; Returns: undefined }
+      set_order_status: {
+        Args: { _id: string; _status: string }
+        Returns: undefined
+      }
+      settle_table: { Args: { _method: string; _table: number }; Returns: Json }
       table_bill: { Args: { _table: number }; Returns: Json }
     }
     Enums: {
