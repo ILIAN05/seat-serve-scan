@@ -86,7 +86,6 @@ export type Database = {
         Row: {
           dish_id: string | null
           dish_name: string
-          done: boolean
           id: string
           note: string | null
           order_id: string
@@ -96,7 +95,6 @@ export type Database = {
         Insert: {
           dish_id?: string | null
           dish_name: string
-          done?: boolean
           id?: string
           note?: string | null
           order_id: string
@@ -106,7 +104,6 @@ export type Database = {
         Update: {
           dish_id?: string | null
           dish_name?: string
-          done?: boolean
           id?: string
           note?: string | null
           order_id?: string
@@ -198,7 +195,6 @@ export type Database = {
       }
       settings: {
         Row: {
-          demo_mode: boolean
           id: number
           late_after_minutes: number
           ordering_open: boolean
@@ -206,7 +202,6 @@ export type Database = {
           table_count: number
         }
         Insert: {
-          demo_mode?: boolean
           id?: number
           late_after_minutes?: number
           ordering_open?: boolean
@@ -214,30 +209,11 @@ export type Database = {
           table_count?: number
         }
         Update: {
-          demo_mode?: boolean
           id?: number
           late_after_minutes?: number
           ordering_open?: boolean
           restaurant_name?: string
           table_count?: number
-        }
-        Relationships: []
-      }
-      table_codes: {
-        Row: {
-          code: string
-          table_number: number
-          updated_at: string
-        }
-        Insert: {
-          code?: string
-          table_number: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          table_number?: number
-          updated_at?: string
         }
         Relationships: []
       }
@@ -288,7 +264,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      demo_guest_link: { Args: never; Returns: Json }
       handle_requests: { Args: { _table: number }; Returns: undefined }
       has_role: {
         Args: {
@@ -298,17 +273,11 @@ export type Database = {
         Returns: boolean
       }
       place_order: {
-        Args: {
-          _allergies?: string[]
-          _code?: string
-          _items: Json
-          _table: number
-        }
+        Args: { _allergies?: string[]; _items: Json; _table: number }
         Returns: string
       }
-      regenerate_table_code: { Args: { _table: number }; Returns: string }
       request_service: {
-        Args: { _code?: string; _table: number; _type: string }
+        Args: { _table: number; _type: string }
         Returns: string
       }
       reset_demo: { Args: never; Returns: undefined }
@@ -316,12 +285,8 @@ export type Database = {
         Args: { _id: string; _status: string }
         Returns: undefined
       }
-      set_item_done: {
-        Args: { _done: boolean; _item: string }
-        Returns: undefined
-      }
       settle_table: { Args: { _method: string; _table: number }; Returns: Json }
-      table_bill: { Args: { _code?: string; _table: number }; Returns: Json }
+      table_bill: { Args: { _table: number }; Returns: Json }
     }
     Enums: {
       app_role: "staff"
