@@ -288,6 +288,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_table_access: {
+        Args: { _code: string; _table: number }
+        Returns: undefined
+      }
       demo_guest_link: { Args: never; Returns: Json }
       handle_requests: { Args: { _table: number }; Returns: undefined }
       has_role: {
@@ -297,6 +301,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      new_table_code: { Args: never; Returns: string }
       place_order: {
         Args: {
           _allergies?: string[]
@@ -312,12 +317,12 @@ export type Database = {
         Returns: string
       }
       reset_demo: { Args: never; Returns: undefined }
-      set_order_status: {
-        Args: { _id: string; _status: string }
-        Returns: undefined
-      }
       set_item_done: {
         Args: { _done: boolean; _item: string }
+        Returns: undefined
+      }
+      set_order_status: {
+        Args: { _id: string; _status: string }
         Returns: undefined
       }
       settle_table: { Args: { _method: string; _table: number }; Returns: Json }
