@@ -36,6 +36,13 @@
       "when": 1792243586849,
       "tag": "0004_table_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792330161000,
+      "tag": "0005_confirm_table_codes",
+      "breakpoints": true
     }
   ]
 }

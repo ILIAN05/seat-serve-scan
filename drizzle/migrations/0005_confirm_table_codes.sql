@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION public.check_table_access(integer, text) IS 'Validates table access using a secret QR code; staff are authorized through has_role.';
