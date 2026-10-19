@@ -37,6 +37,7 @@ import {
   duurLabel,
   euro,
   isOpenBill,
+  isKitchenOpenOrder,
   minutesSince,
   ordersSince,
   STATUS_LABEL,
@@ -276,7 +277,7 @@ function Kitchen() {
     );
   }
 
-  const open = orders.filter((o) => !o.paid_at && (o.status === "ontvangen" || o.status === "in_bereiding"));
+  const open = orders.filter(isKitchenOpenOrder);
   const done = orders
     .filter((o) => o.status === "klaar" || o.status === "geannuleerd")
     .reverse()
@@ -300,9 +301,7 @@ function Kitchen() {
   function refreshCheckout() {
     void qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
     void qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
-    void qc.invalidateQueries({ queryKey: ["admin-orders"] });
-    void qc.invalidateQueries({ queryKey: ["admin-requests"] });
-    void qc.invalidateQueries({ queryKey: ["payments"] });
+    void qc.invalidateQueries({ queryKey: ["admin"] });
   }
 
   return (

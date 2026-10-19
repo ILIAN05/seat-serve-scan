@@ -58,6 +58,10 @@ export const isOpenBill = (
   now: number = Date.now(),
 ) => !o.paid_at && Date.parse(o.created_at) > now - BILL_WINDOW_HOURS * 3_600_000;
 
+/** Afgerekende bestellingen kunnen niet meer worden aangepast in de keuken. */
+export const isKitchenOpenOrder = (o: { status: string; paid_at: string | null }) =>
+  !o.paid_at && (o.status === "ontvangen" || o.status === "in_bereiding");
+
 /**
  * Vanaf wanneer keuken en beheer bestellingen ophalen: vanaf middernacht (voor de cijfers van
  * vandaag), maar minstens het rekeningvenster, zodat een tafel over middernacht heen niet verdwijnt.
