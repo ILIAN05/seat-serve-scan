@@ -137,7 +137,7 @@ export function Zaal({
   );
 }
 
-function TableDialog({
+export function TableDialog({
   state,
   restaurant,
   onClose,

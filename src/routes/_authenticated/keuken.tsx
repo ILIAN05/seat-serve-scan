@@ -15,6 +15,7 @@ import {
   Timer,
   Volume2,
   VolumeX,
+  Wallet,
   X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,6 +43,7 @@ import {
   tijd,
 } from "@/lib/menu";
 import type { Tables } from "@/integrations/supabase/types";
+import { TableDialog } from "@/components/beheer/Zaal";
 
 export const Route = createFileRoute("/_authenticated/keuken")({
   head: () => ({
@@ -50,6 +52,8 @@ export const Route = createFileRoute("/_authenticated/keuken")({
       { name: "description", content: "Live overzicht van bestellingen en tafelmeldingen." },
       { property: "og:title", content: "Keukenscherm – Bistro De Houder" },
       { property: "og:description", content: "Live bestellingen voor de keuken." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Kitchen,
@@ -97,6 +101,7 @@ function Kitchen() {
   const [sound, setSound] = useState(false);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [checkoutTable, setCheckoutTable] = useState<number | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const awake = useWakeLock(sound);
 
@@ -271,7 +276,7 @@ function Kitchen() {
     );
   }
 
-  const open = orders.filter((o) => o.status === "ontvangen" || o.status === "in_bereiding");
+  const open = orders.filter((o) => !o.paid_at && (o.status === "ontvangen" || o.status === "in_bereiding"));
   const done = orders
     .filter((o) => o.status === "klaar" || o.status === "geannuleerd")
     .reverse()
@@ -284,6 +289,21 @@ function Kitchen() {
     return m;
   }, [orders]);
   const toCancel = orders.find((o) => o.id === cancelId);
+  const checkoutOrders = orders.filter((o) => o.table_number === checkoutTable && isOpenBill(o, now));
+  const checkoutState = checkoutTable === null ? null : {
+    table: checkoutTable,
+    orders: checkoutOrders,
+    requests: requests.filter((r) => r.table_number === checkoutTable),
+    total: billTotal(checkoutOrders),
+    since: checkoutOrders[0]?.created_at ?? null,
+  };
+  function refreshCheckout() {
+    void qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+    void qc.invalidateQueries({ queryKey: ["kitchen-requests"] });
+    void qc.invalidateQueries({ queryKey: ["admin-orders"] });
+    void qc.invalidateQueries({ queryKey: ["admin-requests"] });
+    void qc.invalidateQueries({ queryKey: ["payments"] });
+  }
 
   return (
     <div className="min-h-screen p-4 md:p-6">
@@ -386,6 +406,11 @@ function Kitchen() {
               <Button size="lg" onClick={() => handle(r.table_number)}>
                 <Check className="h-5 w-5" /> Afgehandeld
               </Button>
+              {r.type === "rekening" && tableTotals.has(r.table_number) && (
+                <Button size="lg" variant="outline" onClick={() => setCheckoutTable(r.table_number)}>
+                  <Wallet className="h-5 w-5" /> Afrekenen
+                </Button>
+              )}
             </div>
           ))}
         </section>
@@ -510,6 +535,13 @@ function Kitchen() {
                     <Check className="h-5 w-5" /> Klaar om op te dienen
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => setCheckoutTable(o.table_number)}
+                >
+                  <Wallet className="h-4 w-4" /> Afrekenen · {euro(tableTotals.get(o.table_number) ?? 0)}
+                </Button>
                 <button
                   className="mt-2 inline-flex items-center justify-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:underline"
                   onClick={() => setCancelId(o.id)}
@@ -539,6 +571,13 @@ function Kitchen() {
                 <p className="text-sm text-muted-foreground">
                   {o.order_items.map((i) => `${i.quantity}× ${i.dish_name}`).join(", ")}
                 </p>
+                {o.paid_at ? (
+                  <p className="mt-2 text-sm font-medium text-status-done">Afgerekend</p>
+                ) : isOpenBill(o, now) ? (
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => setCheckoutTable(o.table_number)}>
+                    <Wallet className="h-4 w-4" /> Afrekenen · {euro(tableTotals.get(o.table_number) ?? 0)}
+                  </Button>
+                ) : null}
                 {!o.paid_at && (
                   <button
                     className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
@@ -560,6 +599,12 @@ function Kitchen() {
         </aside>
       </div>
 
+      <TableDialog
+        state={checkoutState}
+        restaurant={settings?.restaurant_name ?? "Bistro De Houder"}
+        onClose={() => setCheckoutTable(null)}
+        onChange={refreshCheckout}
+      />
       <AlertDialog open={!!toCancel} onOpenChange={(o) => !o && setCancelId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
