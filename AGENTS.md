@@ -19,4 +19,5 @@
 - Limits live in the database and are mirrored in `src/lib/menu.ts` (`MAX_PER_LINE` 20, `MAX_PER_ORDER` 60, 12 orders per table per 10 min). A table's bill is its unpaid orders of the last 12 hours (`BILL_WINDOW_HOURS`); keep both sides equal.
 - `settings.demo_mode` gates everything demo-only: `reset_demo`, the public demo table on the start page (`demo_guest_link`) and the rush simulator. Turn it off for a real restaurant.
 - Settling records a row in `payments` with an amount computed in the database. Why: the till/POS export needs a trustworthy payment log.
+- Kitchen and floor management reuse the same table checkout dialog so payment methods, bill totals and settlement behavior stay consistent.
 - The till integration is the read-only route `/api/public/kassa`, authenticated with the `POS_API_KEY` bearer secret. Why: external systems have no staff session.

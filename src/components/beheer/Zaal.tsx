@@ -137,7 +137,7 @@ export function Zaal({
   );
 }
 
-function TableDialog({
+export function TableDialog({
   state,
   restaurant,
   onClose,
@@ -202,7 +202,7 @@ function TableDialog({
 
   return (
     <Dialog open={!!state} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto print:max-h-none print:border-0 print:shadow-none">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl print:max-h-none print:border-0 print:shadow-none">
         {state && (
           <>
             <DialogHeader>
@@ -239,7 +239,7 @@ function TableDialog({
                       key={o.id}
                       className={`rounded-xl border p-3 text-sm ${o.status === "geannuleerd" ? "opacity-50" : ""}`}
                     >
-                      <div className="mb-1 flex justify-between font-semibold">
+                      <div className="mb-1 flex flex-wrap justify-between gap-2 font-semibold">
                         <span>{tijd(o.created_at)}</span>
                         <span>{STATUS_LABEL[o.status]}</span>
                       </div>
@@ -262,11 +262,11 @@ function TableDialog({
                     Tafel {state.table} · {new Date().toLocaleString("nl-BE")}
                   </p>
                   {lines.map((l) => (
-                    <div key={`${l.name}-${l.unit}`} className="flex justify-between py-0.5">
-                      <span>
+                    <div key={`${l.name}-${l.unit}`} className="flex justify-between gap-3 py-0.5">
+                      <span className="min-w-0 break-words">
                         {l.quantity}× {l.name}
                       </span>
-                      <span>{euro(l.unit * l.quantity)}</span>
+                      <span className="shrink-0">{euro(l.unit * l.quantity)}</span>
                     </div>
                   ))}
                   <div className="mt-2 flex justify-between border-t pt-2 text-lg font-semibold">
@@ -277,7 +277,7 @@ function TableDialog({
               </>
             )}
 
-            <DialogFooter className="gap-2 no-print">
+            <DialogFooter className="flex-wrap gap-2 sm:flex-wrap no-print">
               {state.orders.length > 0 && (
                 <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="h-4 w-4" /> Afdrukken
