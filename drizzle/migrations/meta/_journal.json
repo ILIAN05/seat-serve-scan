@@ -43,6 +43,13 @@
       "when": 1792330161000,
       "tag": "0005_confirm_table_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795107170172,
+      "tag": "0006_tighten_public_read_settings_categories",
+      "breakpoints": true
     }
   ]
 }
